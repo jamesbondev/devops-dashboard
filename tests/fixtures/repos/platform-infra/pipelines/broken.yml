@@ -1,0 +1,4 @@
+trigger: [main
+stages:
+  - stage: oops
+    jobs: {

@@ -1,0 +1,38 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: orders
+build:
+  artifacts:
+    - image: ordersacr.azurecr.io/orders/orders-api
+      context: .
+      docker:
+        dockerfile: src/Orders.Api/Dockerfile
+    - image: ordersacr.azurecr.io/orders/orders-queue-listener
+      context: .
+      docker:
+        dockerfile: src/Orders.QueueListener/Dockerfile
+  tagPolicy:
+    gitCommit: {}
+manifests:
+  rawYaml:
+    - k8s/orders-api.yaml
+    - k8s/orders-queue-listener.yaml
+deploy:
+  kubectl: {}
+profiles:
+  - name: dev
+    activation:
+      - kubeContext: aks-dev
+  - name: prod
+    manifests:
+      rawYaml:
+        - k8s/*.yaml
+---
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: orders-shared
+requires:
+  - path: ../platform/skaffold.yaml
+    configs: [shared-ingress]

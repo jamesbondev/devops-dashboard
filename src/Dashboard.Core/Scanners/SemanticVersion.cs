@@ -54,9 +54,12 @@ public sealed partial class SemanticVersion : IComparable<SemanticVersion>, IEqu
         var t = text.Trim();
         if (t.Contains('*') || t.Contains("$(")) return null;
         if (TryParse(t, out var v)) return v;
-        t = t.TrimStart('[', '(').TrimEnd(']', ')');
-        var lower = t.Split(',')[0].Trim();
-        if (TryParse(lower, out v)) return v;
+        if (t[0] is '[' or '(')
+        {
+            // Interval notation: use the lower bound; "(,3.0]" (upper bound only) is unknowable.
+            var lower = t.TrimStart('[', '(').TrimEnd(']', ')').Split(',')[0].Trim();
+            return TryParse(lower, out v) ? v : null;
+        }
         var m = EmbeddedVersion().Match(t);
         return m.Success && TryParse(m.Value, out v) ? v : null;
     }

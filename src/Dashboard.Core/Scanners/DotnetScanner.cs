@@ -29,7 +29,11 @@ internal static partial class DotnetScanner
 
     private sealed class MsBuildFile
     {
+        /// <summary>Unconditional properties (last value wins).</summary>
         public Dictionary<string, string> Properties { get; } = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Properties only set under a Condition (first value wins); used when nothing sets them unconditionally.</summary>
+        public Dictionary<string, string> Conditional { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public string? Prop(string name) => Properties.GetValueOrDefault(name) ?? Conditional.GetValueOrDefault(name);
         public List<PackageRef> PackageReferences { get; } = [];
         public List<string> ProjectReferences { get; } = [];
         public Dictionary<string, string> PackageVersions { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -63,7 +67,7 @@ internal static partial class DotnetScanner
         }
 
         d.CentralPackageManagement = d.Projects.Any(p => p.CentralPackageManagement)
-            || cpmFiles.Values.Any(c => IsTrue(c.Properties.GetValueOrDefault("ManagePackageVersionsCentrally")));
+            || cpmFiles.Values.Any(c => IsTrue(c.Prop("ManagePackageVersionsCentrally")));
 
         var codeProjects = d.Projects.Where(p => p.Kind != "Database").ToList();
         d.TargetFrameworks = codeProjects.SelectMany(p => p.TargetFrameworks)
@@ -115,6 +119,9 @@ internal static partial class DotnetScanner
         var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in chain) foreach (var kv in p.Properties) properties[kv.Key] = kv.Value;
         foreach (var kv in proj.Properties) properties[kv.Key] = kv.Value;
+        // Conditional values only fill gaps (a Release-only override must not beat an inherited default).
+        foreach (var kv in proj.Conditional) properties.TryAdd(kv.Key, kv.Value);
+        for (var i = chain.Count - 1; i >= 0; i--) foreach (var kv in chain[i].Conditional) properties.TryAdd(kv.Key, kv.Value);
         properties["MSBuildProjectName"] = Path.GetFileNameWithoutExtension(file.Name);
         Substitute(properties);
 
@@ -122,7 +129,7 @@ internal static partial class DotnetScanner
         foreach (var dir in Ancestors(file.Directory))
             if (cpmFiles.TryGetValue(dir, out cpm)) break;
         var cpmEnabled = IsTrue(properties.GetValueOrDefault("ManagePackageVersionsCentrally"))
-            || (cpm is not null && IsTrue(cpm.Properties.GetValueOrDefault("ManagePackageVersionsCentrally"))
+            || (cpm is not null && IsTrue(cpm.Prop("ManagePackageVersionsCentrally"))
                 && !IsFalse(properties.GetValueOrDefault("ManagePackageVersionsCentrally")));
 
         var packages = new List<PackageRef>();
@@ -250,7 +257,9 @@ internal static partial class DotnetScanner
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(text, LoadOptions.None);
+            // DTDs are never needed in MSBuild files; prohibiting them rules out entity expansion / XXE.
+            using var reader = XmlReader.Create(new StringReader(text), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+            doc = XDocument.Load(reader, LoadOptions.None);
         }
         catch (XmlException ex)
         {
@@ -285,7 +294,7 @@ internal static partial class DotnetScanner
                 else result.Properties[prop.Name.LocalName] = value;
             }
         }
-        foreach (var kv in conditional) result.Properties.TryAdd(kv.Key, kv.Value);
+        foreach (var kv in conditional) if (!result.Properties.ContainsKey(kv.Key)) result.Conditional[kv.Key] = kv.Value;
 
         foreach (var item in root.Descendants().Where(e => e.Parent?.Name.LocalName == "ItemGroup"))
         {

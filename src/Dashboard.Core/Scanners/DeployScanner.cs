@@ -90,7 +90,6 @@ internal static partial class DeployScanner
             {
                 var path = r.Str("path");
                 if (path is not null) s.Requires.Add(path);
-                foreach (var c in r.Seq("configs")) if (c.Scalar() is { } cn) s.Requires.Add(cn);
                 if (r.Get("git") is YamlMappingNode git && git.Str("repo") is { } repo) s.Requires.Add(repo + (git.Str("path") is { } gp ? "//" + gp : ""));
             }
             deploy.Skaffold.Add(s);

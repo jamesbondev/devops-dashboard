@@ -9,7 +9,7 @@ internal static partial class YamlUtil
     /// <summary>Maximum nodes a recursive walk visits (guards against alias "billion laughs" graphs).</summary>
     public const int MaxWalkNodes = 200_000;
 
-    [GeneratedRegex(@"^---(\s.*)?$", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^---(?:[ \t].*)?\r?$", RegexOptions.Multiline)]
     private static partial Regex DocSeparator();
 
     /// <summary>

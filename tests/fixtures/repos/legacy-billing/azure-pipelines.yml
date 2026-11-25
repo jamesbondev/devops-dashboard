@@ -1,0 +1,33 @@
+trigger:
+  - master
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  buildConfiguration: Release
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: 6.0.x
+          - script: dotnet build --configuration $(buildConfiguration)
+          - script: dotnet publish src/Billing.Web -o publish
+          - task: Docker@2
+            inputs:
+              command: buildAndPush
+  - stage: Deploy
+    dependsOn: Build
+    jobs:
+      - deployment: DeployWeb
+        environment: billing-prod
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - script: helm upgrade --install billing chart/billing-web
+                - template: steps/notify.yml

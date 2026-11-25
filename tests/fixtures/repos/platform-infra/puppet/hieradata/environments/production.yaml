@@ -1,0 +1,4 @@
+---
+profile::agent::pool: platform-prod
+profile::agent::count: 6
+profile::monitoring::enabled: true

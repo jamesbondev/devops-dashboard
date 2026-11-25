@@ -15,7 +15,7 @@ internal static partial class MessagingScanner
     [GeneratedRegex(@"(?i)(queue|topic|subscription)(name|path)?s?$")]
     private static partial Regex QueueKey();
 
-    [GeneratedRegex(@"\bIConsumer<|\bIHandleMessages<|\bServiceBusProcessor\b|\bProcessMessageAsync\b|\[ServiceBusTrigger\b|\bServiceBusReceiver\b|\bIJobConsumer<")]
+    [GeneratedRegex(@"\bIConsumer<|\bIHandleMessages<|\bServiceBusProcessor\b|\bProcessMessageAsync\b|\[ServiceBusTrigger\b|\bServiceBusReceiver\b|\bIJobConsumer<|\bRegisterMessageHandler\b|\bRegisterSessionHandler\b")]
     private static partial Regex ConsumerPattern();
 
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._\-/~]{0,259}$")]
