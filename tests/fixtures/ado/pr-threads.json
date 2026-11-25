@@ -1,0 +1,172 @@
+{
+  "value": [
+    {
+      "pullRequestThreadContext": null,
+      "id": 501,
+      "publishedDate": "2026-11-23T09:30:00Z",
+      "lastUpdatedDate": "2026-11-23T09:30:00Z",
+      "comments": [
+        {
+          "id": 1, "parentCommentId": 0,
+          "author": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2", "uniqueName": "bob@contoso.com" },
+          "content": "Bob Example published the pull request",
+          "publishedDate": "2026-11-23T09:30:00Z", "lastUpdatedDate": "2026-11-23T09:30:00Z", "lastContentUpdatedDate": "2026-11-23T09:30:00Z",
+          "commentType": "system", "usersLiked": []
+        }
+      ],
+      "threadContext": null,
+      "properties": {
+        "CodeReviewThreadType": { "$type": "System.String", "$value": "IsDraftUpdate" },
+        "CodeReviewIsDraftNowSet": { "$type": "System.String", "$value": "0" },
+        "CodeReviewIsDraftUpdatedByIdentity": { "$type": "System.String", "$value": "1" },
+        "CodeReviewIsDraftUpdatedByTfId": { "$type": "System.String", "$value": "e2c1d3f5-0000-4000-8000-0000000000b2" }
+      },
+      "identities": { "1": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2", "uniqueName": "bob@contoso.com" } },
+      "isDeleted": false
+    },
+    {
+      "id": 502,
+      "publishedDate": "2026-11-23T10:15:00Z",
+      "comments": [
+        {
+          "id": 1, "parentCommentId": 0,
+          "author": { "displayName": "Microsoft.VisualStudio.Services.TFS", "id": "00000002-0000-8888-8000-000000000000", "uniqueName": "00000002-0000-8888-8000-000000000000@2c895908-04e0-4952-89fd-54b0046d6288" },
+          "content": "Bob Example updated the pull request",
+          "publishedDate": "2026-11-23T10:15:00Z",
+          "commentType": "system"
+        }
+      ],
+      "properties": {
+        "CodeReviewThreadType": { "$type": "System.String", "$value": "RefUpdate" },
+        "CodeReviewRefUpdatedByIdentity": { "$type": "System.String", "$value": "1" },
+        "CodeReviewRefNewCommitsCount": { "$type": "System.Int32", "$value": 1 },
+        "CodeReviewRefUpdateIteration": { "$type": "System.Int32", "$value": 2 }
+      },
+      "identities": { "1": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2" } },
+      "isDeleted": false
+    },
+    {
+      "id": 503,
+      "publishedDate": "2026-11-23T10:20:00Z",
+      "comments": [
+        {
+          "id": 1, "parentCommentId": 0,
+          "author": { "displayName": "Project Collection Build Service (contoso)", "id": "a7a1b2c3-0000-4000-8000-0000000000bb" },
+          "content": "Coverage: 81.2% (+0.4%)",
+          "publishedDate": "2026-11-23T10:20:00Z",
+          "commentType": "text"
+        }
+      ],
+      "status": "closed",
+      "properties": {},
+      "isDeleted": false
+    },
+    {
+      "id": 504,
+      "publishedDate": "2026-11-23T10:30:00Z",
+      "comments": [
+        {
+          "id": 1, "parentCommentId": 0,
+          "author": { "displayName": "Carol Example", "id": "f3d2e4a6-0000-4000-8000-0000000000c3" },
+          "content": "Should this be async?",
+          "publishedDate": "2026-11-23T10:30:00Z",
+          "commentType": "text"
+        },
+        {
+          "id": 2, "parentCommentId": 1,
+          "author": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2" },
+          "content": "Good catch, fixed.",
+          "publishedDate": "2026-11-23T10:45:00Z",
+          "commentType": "text"
+        },
+        {
+          "id": 3, "parentCommentId": 1,
+          "author": { "displayName": "Carol Example", "id": "f3d2e4a6-0000-4000-8000-0000000000c3" },
+          "content": "",
+          "publishedDate": "2026-11-23T10:46:00Z",
+          "commentType": "text",
+          "isDeleted": true
+        }
+      ],
+      "status": "fixed",
+      "threadContext": { "filePath": "/src/Orders/OrderService.cs", "rightFileStart": { "line": 42, "offset": 1 }, "rightFileEnd": { "line": 42, "offset": 30 } },
+      "properties": {
+        "Microsoft.TeamFoundation.Discussion.SupportsMarkdown": { "$type": "System.Int32", "$value": 1 },
+        "Microsoft.TeamFoundation.Discussion.UniqueID": { "$type": "System.String", "$value": "7d7b7a1e-0000-4000-8000-000000000504" }
+      },
+      "isDeleted": false
+    },
+    {
+      "id": 505,
+      "publishedDate": "2026-11-23T11:00:00Z",
+      "comments": [
+        {
+          "id": 1, "parentCommentId": 0,
+          "author": { "displayName": "Microsoft.VisualStudio.Services.TFS", "id": "00000002-0000-8888-8000-000000000000" },
+          "content": "Carol Example voted 10",
+          "publishedDate": "2026-11-23T11:00:00Z",
+          "commentType": "system"
+        },
+        {
+          "id": 2, "parentCommentId": 1,
+          "author": { "displayName": "Dave Example", "id": "11112222-0000-4000-8000-0000000000d4" },
+          "content": "+1",
+          "publishedDate": "2026-11-23T11:05:00Z",
+          "commentType": "text"
+        }
+      ],
+      "properties": {
+        "CodeReviewThreadType": { "$type": "System.String", "$value": "VoteUpdate" },
+        "CodeReviewVoteResult": { "$type": "System.String", "$value": "10" },
+        "CodeReviewVotedByIdentity": { "$type": "System.String", "$value": "1" },
+        "CodeReviewVotedByTfId": { "$type": "System.String", "$value": "f3d2e4a6-0000-4000-8000-0000000000c3" },
+        "CodeReviewVotedByDisplayName": { "$type": "System.String", "$value": "Carol Example" }
+      },
+      "identities": { "1": { "displayName": "Carol Example", "id": "f3d2e4a6-0000-4000-8000-0000000000c3", "uniqueName": "carol@contoso.com" } },
+      "isDeleted": false
+    },
+    {
+      "id": 506,
+      "publishedDate": "2026-11-23T12:00:00Z",
+      "comments": [
+        { "id": 1, "parentCommentId": 0, "author": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2" }, "content": "Bob Example marked the pull request as draft", "publishedDate": "2026-11-23T12:00:00Z", "commentType": "system" }
+      ],
+      "properties": {
+        "CodeReviewThreadType": { "$type": "System.String", "$value": "IsDraftUpdate" },
+        "CodeReviewIsDraftNowSet": { "$type": "System.String", "$value": "1" }
+      },
+      "isDeleted": false
+    },
+    {
+      "id": 507,
+      "publishedDate": "2026-11-23T13:00:00Z",
+      "comments": [
+        { "id": 1, "parentCommentId": 0, "author": { "displayName": "Bob Example", "id": "e2c1d3f5-0000-4000-8000-0000000000b2" }, "content": "Bob Example published the pull request", "publishedDate": "2026-11-23T13:00:00Z", "commentType": "system" }
+      ],
+      "properties": {
+        "CodeReviewThreadType": { "$type": "System.String", "$value": "IsDraftUpdate" },
+        "CodeReviewIsDraftNowSet": { "$type": "System.String", "$value": "0" }
+      },
+      "isDeleted": false
+    },
+    {
+      "id": 508,
+      "publishedDate": "2026-11-23T13:10:00Z",
+      "comments": [
+        { "id": 1, "parentCommentId": 0, "author": { "displayName": "Microsoft.VisualStudio.Services.TFS", "id": "00000002-0000-8888-8000-000000000000" }, "content": "Policy Build validation succeeded", "publishedDate": "2026-11-23T13:10:00Z", "commentType": "system" }
+      ],
+      "properties": { "CodeReviewThreadType": { "$type": "System.String", "$value": "PolicyStatusUpdate" } },
+      "isDeleted": false
+    },
+    {
+      "id": 509,
+      "publishedDate": "2026-11-23T08:00:00Z",
+      "comments": [
+        { "id": 1, "parentCommentId": 0, "author": { "displayName": "Dave Example", "id": "11112222-0000-4000-8000-0000000000d4" }, "content": "deleted thread", "publishedDate": "2026-11-23T08:00:00Z", "commentType": "text" }
+      ],
+      "properties": {},
+      "isDeleted": true
+    }
+  ],
+  "count": 9
+}

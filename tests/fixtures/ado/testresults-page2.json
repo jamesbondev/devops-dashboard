@@ -1,0 +1,8 @@
+{
+  "count": 3,
+  "value": [
+    { "id": 100003, "refId": 4, "runId": 902, "testCaseTitle": "Orders.Tests.Pricing.Applies(rate: 7)", "automatedTestName": "Orders.Tests.Pricing.Applies", "automatedTestStorage": "orders.tests.dll", "outcome": "Passed", "owner": "", "priority": 0, "durationInMs": 4.0, "isReRun": false },
+    { "id": 100004, "refId": 5, "runId": 902, "testCaseTitle": "Constructor_ThrowsOnNull", "automatedTestName": "Orders.Tests.OrderTests.Constructor_ThrowsOnNull", "automatedTestStorage": "orders.tests.dll", "outcome": "Passed", "owner": "", "priority": 0, "durationInMs": 9.0, "isReRun": true },
+    { "id": 100005, "refId": 6, "runId": 902, "testCaseTitle": "Orders.Tests.Pricing.Applies(rate: 5)", "automatedTestName": "Orders.Tests.Pricing.Applies", "automatedTestStorage": "orders.tests.dll", "outcome": "Failed", "owner": "", "priority": 0, "durationInMs": 7.0, "isReRun": true }
+  ]
+}

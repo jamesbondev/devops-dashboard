@@ -1,0 +1,85 @@
+{
+  "count": 2,
+  "value": [
+    {
+      "id": "0f3c6a1e-0000-4000-8000-00000000aa01",
+      "steps": [
+        {
+          "assignedApprover": {
+            "displayName": "[Platform]\\Release Approvers",
+            "id": "9a8b7c6d-0000-4000-8000-0000000000f1",
+            "uniqueName": "vstfs:///Classification/TeamProject/5d1b7a9c-0000-4000-8000-00000000a001\\Release Approvers",
+            "descriptor": "vssgp.Uy0xLTktMTU1MTM3NDI0NS0xMjM0",
+            "isContainer": true
+          },
+          "status": "pending",
+          "comment": null,
+          "initiatedOn": "2026-11-24T09:05:00.000Z",
+          "history": [],
+          "order": 1
+        },
+        {
+          "assignedApprover": {
+            "displayName": "Carol Example",
+            "id": "f3d2e4a6-0000-4000-8000-0000000000c3",
+            "uniqueName": "carol@contoso.com",
+            "descriptor": "aad.ZjNkMmU0YTYtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMGMz"
+          },
+          "actualApprover": {
+            "displayName": "Carol Example",
+            "id": "f3d2e4a6-0000-4000-8000-0000000000c3"
+          },
+          "status": "approved",
+          "comment": "lgtm",
+          "initiatedOn": "2026-11-24T09:05:00.000Z",
+          "lastModifiedOn": "2026-11-24T09:10:00.000Z",
+          "history": [],
+          "order": 2
+        }
+      ],
+      "status": "pending",
+      "createdOn": "2026-11-24T09:05:00.1234567Z",
+      "lastModifiedOn": "2026-11-24T09:10:00.7654321Z",
+      "instructions": "Check the change ticket before approving prod.",
+      "minRequiredApprovers": 1,
+      "blockedApprovers": [],
+      "executionOrder": "anyOrder",
+      "_links": { "self": { "href": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_apis/pipelines/approvals/0f3c6a1e-0000-4000-8000-00000000aa01" } },
+      "pipeline": {
+        "owner": {
+          "_links": {
+            "web": { "href": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_build/results?buildId=1203" },
+            "self": { "href": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_apis/build/Builds/1203" }
+          },
+          "id": 1203,
+          "name": "20261121.1"
+        },
+        "id": "42",
+        "name": "orders-service-cd"
+      }
+    },
+    {
+      "id": "0f3c6a1e-0000-4000-8000-00000000aa02",
+      "steps": [
+        {
+          "assignedApprover": { "displayName": "Dave Example", "id": "11112222-0000-4000-8000-0000000000d4" },
+          "status": "pending",
+          "history": [],
+          "order": 1
+        }
+      ],
+      "status": "pending",
+      "createdOn": "2026-11-24T11:00:00Z",
+      "lastModifiedOn": "2026-11-24T11:00:00Z",
+      "instructions": "",
+      "minRequiredApprovers": 1,
+      "blockedApprovers": [],
+      "executionOrder": "anyOrder",
+      "pipeline": {
+        "owner": { "_links": { "web": { "href": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_build/results?buildId=1300" } }, "id": 1300, "name": "20261124.3" },
+        "id": "57",
+        "name": "billing-cd"
+      }
+    }
+  ]
+}

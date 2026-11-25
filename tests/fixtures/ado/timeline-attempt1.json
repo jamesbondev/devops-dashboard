@@ -1,0 +1,60 @@
+{
+  "records": [
+    {
+      "previousAttempts": [],
+      "id": "c0000000-0000-4000-8000-000000000003",
+      "parentId": "a0000000-0000-4000-8000-000000000002",
+      "type": "Job",
+      "name": "Test",
+      "startTime": "2026-11-21T08:00:06Z",
+      "finishTime": "2026-11-21T08:09:30Z",
+      "state": "completed",
+      "result": "failed",
+      "changeId": 20,
+      "workerName": "Azure Pipelines 2",
+      "order": 1,
+      "errorCount": 1,
+      "warningCount": 0,
+      "issues": [ { "type": "error", "category": "General", "message": "Bash exited with code '1'.", "data": { "type": "error", "logFileLineNumber": "12" } } ],
+      "attempt": 1,
+      "identifier": "Build.Test.__default"
+    },
+    {
+      "previousAttempts": [],
+      "id": "c0000000-0000-4000-8000-000000000004",
+      "parentId": "c0000000-0000-4000-8000-000000000003",
+      "type": "Task",
+      "name": "dotnet test",
+      "startTime": "2026-11-21T08:01:00Z",
+      "finishTime": "2026-11-21T08:09:20Z",
+      "state": "completed",
+      "result": "failed",
+      "order": 3,
+      "errorCount": 1,
+      "issues": [
+        { "type": "warning", "category": "General", "message": "retrying flaky step" },
+        { "type": "error", "category": "General", "message": "Error: The process '/usr/bin/dotnet' failed with exit code 1" }
+      ],
+      "task": { "id": "5541a522-603c-47ad-91fc-a4b1d163081b", "name": "DotNetCoreCLI", "version": "2.247.1" },
+      "attempt": 1,
+      "identifier": null
+    },
+    {
+      "previousAttempts": [],
+      "id": "c0000000-0000-4000-8000-0000000000ff",
+      "parentId": null,
+      "type": "Stage",
+      "name": "Unrelated",
+      "state": "completed",
+      "result": "succeeded",
+      "order": 9,
+      "attempt": 1,
+      "identifier": "Unrelated"
+    }
+  ],
+  "lastChangedBy": "00000002-0000-8888-8000-000000000000",
+  "lastChangedOn": "2026-11-21T08:09:31Z",
+  "id": "b1111111-0000-4000-8000-000000000000",
+  "changeId": 20,
+  "url": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_apis/build/builds/1203/Timeline/b1111111-0000-4000-8000-000000000000"
+}

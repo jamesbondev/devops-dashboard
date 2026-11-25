@@ -1,0 +1,21 @@
+{
+  "count": 1,
+  "value": [
+    {
+      "_links": { "web": { "href": "https://dev.azure.com/contoso/5d1b7a9c-0000-4000-8000-00000000a001/_build/results?buildId=1203" } },
+      "id": 1203,
+      "buildNumber": "20261121.1",
+      "status": "completed",
+      "result": "failed",
+      "queueTime": "2026-11-21T08:00:00Z",
+      "startTime": "2026-11-21T08:00:03Z",
+      "finishTime": "2026-11-21T08:09:30Z",
+      "definition": { "id": 42, "name": "orders-service-ci" },
+      "sourceBranch": "refs/heads/main",
+      "sourceVersion": "bb22cc33dd44ee55ff6677889900aabbccddeeff",
+      "reason": "schedule",
+      "requestedFor": { "displayName": "Microsoft.VisualStudio.Services.TFS", "id": "00000002-0000-8888-8000-000000000000" },
+      "repository": { "id": "6b1f0e2a-0000-4000-8000-0000000000b1", "type": "TfsGit", "name": "orders-service" }
+    }
+  ]
+}
