@@ -1,0 +1,31 @@
+# Secrets & local config
+.env
+.env.*
+!.env.example
+secrets/
+*.pat
+
+# Local data / volumes
+data/
+clones/
+*.db
+*.db-shm
+*.db-wal
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+coverage*/
+
+# IDEs / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
