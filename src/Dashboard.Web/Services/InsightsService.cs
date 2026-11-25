@@ -78,7 +78,7 @@ public sealed class InsightsService(IServiceScopeFactory scopes, ConfigService c
         try
         {
             return Dashboard.Core.Audit.FleetOutliers.Compute(facts)
-                .Select(o => new Outlier(o.Fact, o.Repo, o.RepoValue.ToString() ?? "", o.MajorityValue.ToString() ?? "", o.MajorityShare, o.ApplicableRepos))
+                .Select(o => new Outlier(o.Fact, o.Repo, o.RepoValue ? "yes" : "no", o.MajorityValue ? "yes" : "no", o.MajorityShare, o.ApplicableRepos))
                 .ToList();
         }
         catch (Exception) { return []; }

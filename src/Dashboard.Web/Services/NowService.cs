@@ -80,7 +80,7 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
             var wall = (now - red.Start).TotalHours;
             attention.Add(new AttentionItem(AttentionKind.MainRed, h.Repo.Id, h.Repo.Name,
                 $"main red for {Fmt.Hours(wall)}: {h.Repo.Name}",
-                $"{pname} #{run?.BuildNumber} · last change by {run?.RequestedFor ?? "?"} (for context)",
+                $"{pname} #{run?.BuildNumber}",
                 run?.WebUrl, red.Start, 800 + Math.Min(wall, 72)));
         }
 

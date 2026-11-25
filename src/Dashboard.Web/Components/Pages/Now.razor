@@ -42,7 +42,7 @@ else if (_model is { } m)
                                 <div class="icon">@Icon(a.Kind)</div>
                                 <div>
                                     <div class="title">@if (a.Badge is not null) { <span class="badge bad">@a.Badge</span> } <a href="repo/@Uri.EscapeDataString(a.RepoName)">@a.Title</a></div>
-                                    <div class="detail person-aware">@a.Detail</div>
+                                    <div class="detail">@a.Detail</div>
                                 </div>
                                 <div class="when"><Ago At="a.Since" /><br /><AdoLink Href="@a.Link">open in ADO ↗</AdoLink></div>
                             </div>

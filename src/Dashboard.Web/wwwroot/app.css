@@ -149,3 +149,8 @@ body.present .topbar .tools .jump { display: none; }
 
 #blazor-error-ui { background: var(--bad-soft); color: var(--bad); bottom: 0; display: none; left: 0; padding: .6rem 1.25rem; position: fixed; width: 100%; z-index: 1000; }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }
+
+h1:focus, h1:focus-visible { outline: none; }
+table.t code { white-space: nowrap; }
+.spark line { opacity: .35; }
+body.present .person-aware { display: none; }

@@ -362,9 +362,10 @@ public sealed class MockWorld
         // Build + Test (build stages). Possible failure, possibly retried (flaky).
         var buildFails = rng.NextDouble() < repo.FailRate;
         var failStage = rng.NextDouble() < 0.5 ? "Build" : "Test";
-        var flaky = buildFails && rng.NextDouble() < repo.FlakeShare && !isPr;
+        var flaky = !isPr && (buildFails ? rng.NextDouble() < repo.FlakeShare : rng.NextDouble() < repo.FlakeShare * 0.12);
+        if (flaky) buildFails = true;
         var useShared = rng.NextDouble() < 0.3;
-        var error = useShared ? SharedErrors[rng.Next(SharedErrors.Length)] : LocalErrors[rng.Next(LocalErrors.Length)];
+        var error = useShared ? SharedErrors[rng.Next(SharedErrors.Length)] : $"[{repo.Name}] " + LocalErrors[rng.Next(LocalErrors.Length)].Replace("IntegrationTests", Pascal(repo.Name) + "Tests");
         var buildFailedFinal = false;
         foreach (var stageName in new[] { "Build", "Test" })
         {
@@ -388,9 +389,9 @@ public sealed class MockWorld
             }
             else
             {
-                var res = rng.NextDouble() < 0.02 ? "succeededWithIssues" : "succeeded";
+                var res = rng.NextDouble() < 0.005 ? "succeededWithIssues" : "succeeded";
                 AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), res, 1, false, stageName == "Build" ? "Compile" : "UnitTests",
-                    res == "succeededWithIssues" ? "##[error]Code coverage below threshold (continueOnError)" : null);
+                    res == "succeededWithIssues" ? $"[{repo.Name}] Code coverage below threshold (continueOnError)" : null);
                 if (res == "succeededWithIssues") buildFailedFinal = true;
                 t = t.AddMinutes(dur);
             }
@@ -472,7 +473,7 @@ public sealed class MockWorld
         {
             var dur = job == "DeployDacpac" ? 2 + rng.NextDouble() * 4 : 3 + rng.NextDouble() * 6;
             var fails = job == failJob;
-            var err = fails ? DeployErrors[job == "DeployDacpac" ? 2 : rng.Next(2)] : null;
+            var err = fails ? (job == "DeployDacpac" ? $"[{repo.Name}] " + DeployErrors[2] : rng.NextDouble() < 0.5 ? DeployErrors[1] : $"[{repo.Name}] " + DeployErrors[0]) : null;
             tl.Add(new TimelineRecord
             {
                 RunId = runId, RecordId = StableGuid($"{runId}:{stage}:{job}"), ParentId = phaseId, Type = "Job", Name = job, Identifier = $"{stage}.Deploy.{job}",
