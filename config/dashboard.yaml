@@ -52,7 +52,7 @@ sync:
   warmMinutes: 15                # history
   dailyHour: 2                   # local hour; runs on startup if overdue
   backfillPrDays: 180
-  backfillBuildDays: 365
+  backfillBuildDays: 90           # builds older than retention are gone anyway
   overlapMinutes: 60
 
 results:

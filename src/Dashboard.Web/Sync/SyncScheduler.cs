@@ -15,6 +15,7 @@ public sealed class SyncSignals
     public long Version { get; private set; }
     public string? Running { get; set; }
     public bool Paused { get; set; }
+    public bool WarmBacklog { get; set; }
 
     public void Wake() => _wake.Release();
     public Task WaitAsync(TimeSpan timeout, CancellationToken ct) => _wake.WaitAsync(timeout, ct);
@@ -70,10 +71,18 @@ public sealed class SyncScheduler(
             await RunAsync("hot", null, (s, c) => s.GetRequiredService<SyncService>().HotAsync(c), ct, record: false);
         }
 
-        if (now - _lastWarm >= TimeSpan.FromMinutes(cfg.Sync.WarmMinutes))
+        var warmDue = now - _lastWarm >= TimeSpan.FromMinutes(cfg.Sync.WarmMinutes)
+                      || (signals.WarmBacklog && now - _lastWarm >= TimeSpan.FromSeconds(60));
+        if (warmDue)
         {
             _lastWarm = now;
-            await RunAsync("warm", null, (s, c) => s.GetRequiredService<SyncService>().WarmAsync(c), ct);
+            await RunAsync("warm", null, async (s, c) =>
+            {
+                var sync = s.GetRequiredService<SyncService>();
+                var summary = await sync.WarmAsync(c);
+                signals.WarmBacklog = sync.Backlog;
+                return summary;
+            }, ct);
         }
 
         // Queued jobs (backfill, single-repo warm, re-derive, manual triggers)

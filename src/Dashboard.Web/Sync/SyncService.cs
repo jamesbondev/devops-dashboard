@@ -269,15 +269,22 @@ public sealed class SyncService(
     public async Task<string> WarmAsync(CancellationToken ct, string? onlyRepoId = null)
     {
         var repos = (await AssignedReposAsync(ct)).Where(r => onlyRepoId is null || r.Id == onlyRepoId).ToList();
+        // Least-synced repos first so a limited timeline budget spreads fairly.
+        var cursors = await db.SyncCursors.AsNoTracking().Where(c => c.Key.StartsWith("runs:")).ToDictionaryAsync(c => c.Key, c => c.Watermark, ct);
+        repos = repos.OrderBy(r => cursors.GetValueOrDefault("runs:" + r.Id) ?? DateTimeOffset.MinValue).ToList();
         int runs = 0, prs = 0, commits = 0;
+        // The mock has no rate limit, so it gets a much larger budget to keep local runs quick.
+        var factor = ado.IsMock ? 20 : 1;
+        var budget = new TimelineBudget(TimelineBudgetPerPass * factor);
+        var threadBudget = new TimelineBudget(ThreadBudgetPerPass * factor);
         var projectId = await ProjectIdAsync(ct);
         foreach (var repo in repos)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                runs += await SyncRunsAsync(repo, null, ct);
-                prs += await SyncPrsAsync(repo, null, projectId, ct);
+                runs += await SyncRunsAsync(repo, budget, ct);
+                prs += await SyncPrsAsync(repo, null, projectId, ct, threadBudget);
                 commits += await SyncCommitsAsync(repo, ct);
                 await MarkAsync("warm:" + repo.Id);
             }
@@ -288,7 +295,8 @@ public sealed class SyncService(
             }
         }
         if (onlyRepoId is null) await MarkAsync("warm");
-        return $"{runs} runs, {prs} PRs, {commits} commits updated";
+        Backlog = budget.Exhausted || threadBudget.Exhausted;
+        return $"{runs} runs, {prs} PRs, {commits} commits updated" + (Backlog ? " (API budget reached; continuing next pass)" : "");
     }
 
     public async Task<string> BackfillAsync(string repoId, CancellationToken ct)
@@ -298,8 +306,9 @@ public sealed class SyncService(
         foreach (var p in pipelines)
             if (await db.Pipelines.FindAsync([p.Id], ct) is null) db.Pipelines.Add(p);
         await db.SaveChangesAsync(ct);
-        var runs = await SyncRunsAsync(repo, Now.AddDays(-Cfg.Sync.BackfillBuildDays), ct);
-        var prs = await SyncPrsAsync(repo, Now.AddDays(-Cfg.Sync.BackfillPrDays), await ProjectIdAsync(ct), ct);
+        // Runs are backfilled by the budgeted warm sync (cursor starts at sync.backfillBuildDays).
+        var runs = 0;
+        var prs = await SyncPrsAsync(repo, Now.AddDays(-Cfg.Sync.BackfillPrDays), await ProjectIdAsync(ct), ct, new TimelineBudget(0));
         var commits = await SyncCommitsAsync(repo, ct, Now.AddDays(-Cfg.Sync.BackfillPrDays));
         repo.BackfilledAt = Now;
         await db.SaveChangesAsync(ct);
@@ -317,26 +326,50 @@ public sealed class SyncService(
         return c.Value;
     }
 
-    private async Task<int> SyncRunsAsync(Repo repo, DateTimeOffset? since, CancellationToken ct)
+    /// <summary>Max timeline fetches per warm pass (each is 1–2 API calls); the rest continues on the next pass.</summary>
+    public const int TimelineBudgetPerPass = 300;
+
+    /// <summary>Max PR thread fetches per warm pass.</summary>
+    public const int ThreadBudgetPerPass = 300;
+
+    /// <summary>True when the last warm pass stopped because the timeline budget ran out.</summary>
+    public bool Backlog { get; private set; }
+
+    public sealed class TimelineBudget(int max)
+    {
+        private int _used;
+        public bool TryTake() { if (_used >= max) return false; _used++; return true; }
+        public bool Exhausted => _used >= max;
+    }
+
+    private async Task<int> SyncRunsAsync(Repo repo, TimelineBudget budget, CancellationToken ct)
     {
         var pipelineIds = await db.Pipelines.Where(p => p.RepoId == repo.Id).Select(p => p.Id).ToListAsync(ct);
         if (pipelineIds.Count == 0) return 0;
         var cursor = await CursorAsync("runs:" + repo.Id);
-        var min = since ?? (cursor.Watermark?.AddMinutes(-Cfg.Sync.OverlapMinutes) ?? Now.AddDays(-Cfg.Sync.BackfillBuildDays));
+        var min = cursor.Watermark?.AddMinutes(-Cfg.Sync.OverlapMinutes) ?? Now.AddDays(-Cfg.Sync.BackfillBuildDays);
         var runs = await ado.ListRunsAsync(new RunQuery { DefinitionIds = pipelineIds, MinTime = min, StatusFilter = "completed" }, ct);
         var updated = 0;
+        DateTimeOffset? processedUntil = null;
         foreach (var run in runs.OrderBy(r => r.FinishTime))
         {
             var changed = await UpsertRunAsync(run, ct);
             var stored = await db.Runs.FindAsync([run.Id], ct);
-            if (changed || stored is { TimelineFetched: false } || stored?.TimelineFetchedFor != run.FinishTime)
+            var needsTimeline = changed || stored is { TimelineFetched: false } || stored?.TimelineFetchedFor != run.FinishTime;
+            if (needsTimeline && run.IsPullRequest)
             {
+                // PR validation metrics only need the result; skip the timeline to save API calls.
+                if (stored is not null) { stored.TimelineFetched = true; stored.TimelineFetchedFor = run.FinishTime; }
+            }
+            else if (needsTimeline)
+            {
+                if (!budget.TryTake()) break;
                 await RefreshTimelineAsync(run, repo, ct, force: false);
                 updated++;
             }
+            processedUntil = run.FinishTime ?? processedUntil;
         }
-        var maxFinish = runs.Select(r => r.FinishTime).Where(f => f is not null).DefaultIfEmpty(null).Max();
-        if (maxFinish is not null && (cursor.Watermark is null || maxFinish > cursor.Watermark)) cursor.Watermark = maxFinish;
+        if (processedUntil is not null && (cursor.Watermark is null || processedUntil > cursor.Watermark)) cursor.Watermark = processedUntil;
         await db.SaveChangesAsync(ct);
         return updated;
     }
@@ -363,15 +396,17 @@ public sealed class SyncService(
     {
         var records = await ado.GetTimelineAsync(run.Id, ct);
         Detach<TimelineRecord>(t => t.RunId == run.Id);
-        await db.TimelineRecords.Where(t => t.RunId == run.Id).ExecuteDeleteAsync(ct);
+        if ((await db.Runs.AsNoTracking().Where(r => r.Id == run.Id).Select(r => r.TimelineFetched).FirstOrDefaultAsync(ct)))
+            await db.TimelineRecords.Where(t => t.RunId == run.Id).ExecuteDeleteAsync(ct);
         foreach (var r in records.GroupBy(r => r.RecordId).Select(g => g.First())) db.TimelineRecords.Add(r);
 
         var stored = await db.Runs.FindAsync([run.Id], ct) ?? run;
         stored.TimelineFetched = true;
         stored.TimelineFetchedFor = run.FinishTime;
 
-        // Template resource actually used (covers nested templates).
-        if (stored.TemplateSha is null || force)
+        // Template resource actually used (covers nested templates). Only recent default-branch runs matter for compliance.
+        var recentMain = !run.IsPullRequest && run.QueueTime >= Now.AddDays(-Cfg.Metrics.WindowDays);
+        if (recentMain && (stored.TemplateSha is null || force))
         {
             try
             {
@@ -426,7 +461,7 @@ public sealed class SyncService(
         return runs.Count;
     }
 
-    private async Task<int> SyncPrsAsync(Repo repo, DateTimeOffset? since, string? projectId, CancellationToken ct)
+    private async Task<int> SyncPrsAsync(Repo repo, DateTimeOffset? since, string? projectId, CancellationToken ct, TimelineBudget threadBudget)
     {
         var cursor = await CursorAsync("prs:" + repo.Id);
         var min = since ?? (cursor.Watermark?.AddMinutes(-Cfg.Sync.OverlapMinutes) ?? Now.AddDays(-Cfg.Sync.BackfillPrDays));
@@ -439,8 +474,13 @@ public sealed class SyncService(
         var needEvents = await db.PullRequests
             .Where(p => p.RepoId == repo.Id && (!p.ThreadsFetched || (p.Status == "active" && p.LastSyncedAt < staleBefore)))
             .ToListAsync(ct);
+        // Active PRs first, then most recently closed; threads for older PRs follow on later passes.
+        needEvents = needEvents.OrderByDescending(p => p.Status == "active").ThenByDescending(p => p.ClosedOn ?? p.CreatedOn).ToList();
+        var processed = 0;
         foreach (var pr in needEvents)
         {
+            if (!threadBudget.TryTake()) break;
+            processed++;
             var result = await ado.GetPullRequestEventsAsync(repo.Id, pr.Id, pr.AuthorId, ct);
             var bots = new Core.Metrics.PrMetricsCalculator(Cfg, config.WorkingHours);
             Detach<PrEvent>(e => e.PullRequestId == pr.Id);
@@ -464,7 +504,7 @@ public sealed class SyncService(
         var maxClosed = closed.Select(p => p.ClosedOn).Where(c => c is not null).DefaultIfEmpty(null).Max();
         if (maxClosed is not null && (cursor.Watermark is null || maxClosed > cursor.Watermark)) cursor.Watermark = maxClosed;
         await db.SaveChangesAsync(ct);
-        return closed.Count + needEvents.Count;
+        return closed.Count + processed;
     }
 
     private async Task UpsertPrAsync(PullRequest pr, CancellationToken ct)

@@ -74,7 +74,7 @@ public sealed class SyncConfig
     /// <summary>Local hour (in Time.TimeZone) for the daily job; runs on startup if overdue.</summary>
     public int DailyHour { get; set; } = 2;
     public int BackfillPrDays { get; set; } = 180;
-    public int BackfillBuildDays { get; set; } = 365;
+    public int BackfillBuildDays { get; set; } = 90;
     public int OverlapMinutes { get; set; } = 60;
 }
 

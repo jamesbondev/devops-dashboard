@@ -1,0 +1,56 @@
+# DevOps Dashboard — local only.  Usage:
+#   cp .env.example .env     # then edit
+#   docker compose up -d --build
+#   open http://localhost:8080
+# One-time Copilot login (device code), then set AUDITOR_ENGINE=copilot in .env and `docker compose up -d`:
+#   docker compose run --rm auditor login
+name: devops-dashboard
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    image: devops-dashboard-app:local
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8080}:8080"   # localhost only
+    environment:
+      ADO_MODE: ${ADO_MODE:-}
+      ADO_ORGANIZATION: ${ADO_ORGANIZATION:-}
+      ADO_PROJECT: ${ADO_PROJECT:-}
+      ADO_PAT: ${ADO_PAT:-}
+      AUDITOR_URL: http://auditor:8081
+      AUDITOR_TOKEN: ${AUDITOR_TOKEN:?set AUDITOR_TOKEN in .env (any long random string)}
+      PACKAGE_LOOKUPS: ${PACKAGE_LOOKUPS:-false}
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - data:/data                    # SQLite + backups (named volume — not /mnt/c)
+      - clones:/clones                # partial clones + per-audit worktrees
+      - ./config:/app/config:ro       # edit config/dashboard.yaml, then Settings → Reload config
+      - ./audit:/app/audit:ro         # rubric (+ audit/rubric/team/*.yaml for team standards)
+    depends_on:
+      - auditor
+    restart: unless-stopped
+
+  auditor:
+    build:
+      context: .
+      dockerfile: docker/auditor.Dockerfile
+    image: devops-dashboard-auditor:local
+    # No ADO PAT here, no published port: only the app can reach it on the compose network.
+    environment:
+      AUDITOR_ENGINE: ${AUDITOR_ENGINE:-mock}
+      AUDITOR_TOKEN: ${AUDITOR_TOKEN:?set AUDITOR_TOKEN in .env (any long random string)}
+      AUDITOR_DEFAULT_MODEL: ${AUDITOR_DEFAULT_MODEL:-}
+      COPILOT_GITHUB_TOKEN: ${COPILOT_GITHUB_TOKEN:-}
+    expose:
+      - "8081"
+    volumes:
+      - clones:/clones:ro             # read-only view of the worktrees
+      - copilot-auth:/copilot-home    # Copilot login (treat as a secret)
+    restart: unless-stopped
+
+volumes:
+  data:
+  clones:
+  copilot-auth:

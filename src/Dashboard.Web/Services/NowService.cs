@@ -30,9 +30,21 @@ public sealed class NowModel
     public DateTimeOffset GeneratedAt { get; init; }
 }
 
-public sealed class NowService(IServiceScopeFactory scopes, ConfigService config, IClock clock, HealthService health)
+public sealed class NowService(IServiceScopeFactory scopes, ConfigService config, IClock clock, HealthService health, Sync.SyncSignals signals)
 {
+    private (long Version, DateTimeOffset At, DateTimeOffset? LastLooked, NowModel Model)? _cache;
+
     public async Task<NowModel> BuildAsync(DateTimeOffset? lastLooked, CancellationToken ct = default)
+    {
+        var c = _cache;
+        if (c is not null && c.Value.Version == signals.Version && c.Value.LastLooked == lastLooked && clock.UtcNow - c.Value.At < TimeSpan.FromSeconds(10))
+            return c.Value.Model;
+        var model = await BuildCoreAsync(lastLooked, ct);
+        _cache = (signals.Version, clock.UtcNow, lastLooked, model);
+        return model;
+    }
+
+    private async Task<NowModel> BuildCoreAsync(DateTimeOffset? lastLooked, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
