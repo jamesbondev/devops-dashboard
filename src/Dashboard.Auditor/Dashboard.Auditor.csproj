@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Dashboard.Auditor</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Dashboard.Core\Dashboard.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Copilot.SDK" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dashboard.Tests" />
+  </ItemGroup>
+</Project>
