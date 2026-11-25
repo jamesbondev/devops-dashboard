@@ -39,6 +39,8 @@ public sealed class DotnetFacts
     public List<string> Solutions { get; set; } = [];             // .sln / .slnx paths
     public List<DotnetProject> Projects { get; set; } = [];
     public bool CentralPackageManagement { get; set; }            // Directory.Packages.props with ManagePackageVersionsCentrally
+    /// <summary>Path of the root-most Directory.Packages.props, when present.</summary>
+    public string? DirectoryPackagesPropsPath { get; set; }
     public bool HasDirectoryBuildProps { get; set; }
     public bool HasGlobalJson { get; set; }
     public string? SdkVersion { get; set; }                       // from global.json
@@ -65,6 +67,8 @@ public sealed class DotnetProject
     public string? TestFramework { get; set; }                    // xunit, nunit, mstest
     public List<string> ProjectReferences { get; set; } = [];     // project names
     public List<PackageRef> PackageReferences { get; set; } = [];
+    /// <summary>True when this project's package versions come from a Directory.Packages.props (CPM).</summary>
+    public bool CentralPackageManagement { get; set; }
 }
 
 public sealed class PackageRef
