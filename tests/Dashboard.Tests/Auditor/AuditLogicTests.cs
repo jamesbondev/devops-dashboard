@@ -326,3 +326,23 @@ public sealed class AuditPromptTests
         Assert.Null(ModelSelector.Choose([], "gpt-5", null));
     }
 }
+
+public sealed class ErrorTextTests
+{
+    [Fact]
+    public void Summarises_rpc_http_failures()
+    {
+        var ex = new InvalidOperationException(
+            "Request models.list failed with message: GenericFailure, {\"kind\":\"http\",\"status\":403,\"statusText\":\"Forbidden\",\"body\":\"unauthorized: not authorized to use this Copilot feature\\n\",\"headers\":[{\"name\":\"date\",\"value\":\"x\"}]}");
+        Assert.Equal(
+            "Request models.list failed with message: GenericFailure: HTTP 403 unauthorized: not authorized to use this Copilot feature",
+            Dashboard.Auditor.Engines.ErrorText.Summarise(ex));
+    }
+
+    [Fact]
+    public void Caps_long_messages()
+    {
+        var s = Dashboard.Auditor.Engines.ErrorText.Summarise(new InvalidOperationException(new string('x', 2000)));
+        Assert.True(s.Length <= 501);
+    }
+}

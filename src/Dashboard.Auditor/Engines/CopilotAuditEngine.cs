@@ -160,7 +160,7 @@ public sealed class CopilotAuditEngine(
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Copilot status check failed");
-            status.Error = $"{ex.GetType().Name}: {ex.Message}";
+            status.Error = ErrorText.Summarise(ex);
         }
         return status;
     }
@@ -223,19 +223,20 @@ public sealed class CopilotAuditEngine(
                     + (verification.DowngradedChecks.Count > 0 ? $"; uncertain without evidence: {string.Join(", ", verification.DowngradedChecks)}" : ""));
                 results.Add(vote);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException oce)
             {
-                throw;
+                // Keep the partial transcript; the worker turns this into "timed out" / "shutting down".
+                throw new AuditEngineException("audit cancelled", transcript.ToString(), oce);
             }
             catch (Exception ex) when (votes > 1)
             {
-                failures.Add($"vote {i + 1}: {ex.Message}");
-                transcript.AppendLine($"[auditor] vote {i + 1} failed: {ex.Message}");
+                failures.Add($"vote {i + 1}: {ErrorText.Summarise(ex)}");
+                transcript.AppendLine($"[auditor] vote {i + 1} failed: {ErrorText.Summarise(ex)}");
                 _logger.LogWarning(ex, "Audit {AuditId} vote {Vote} failed", request.AuditId, i + 1);
             }
             catch (Exception ex)
             {
-                throw new AuditEngineException(ex.Message, transcript.ToString(), ex);
+                throw new AuditEngineException(ErrorText.Summarise(ex), transcript.ToString(), ex);
             }
         }
 
@@ -468,6 +469,11 @@ public sealed class CopilotAuditEngine(
         };
 
         var client = await GetClientAsync(cancellationToken);
+        var auth = await client.GetAuthStatusAsync(cancellationToken);
+        if (!auth.IsAuthenticated)
+        {
+            throw new InvalidOperationException("Copilot " + NotAuthenticatedMessage(auth.StatusMessage));
+        }
         var models = await GetModelIdsAsync(client, cancellationToken);
         var model = ModelSelector.Choose(models, request.Model, options.DefaultModel)
                     ?? throw new InvalidOperationException("no Copilot models are available to this account");

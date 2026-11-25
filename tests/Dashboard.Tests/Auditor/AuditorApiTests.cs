@@ -1,10 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using Dashboard.Auditor;
+using Dashboard.Auditor.Engines;
 using Dashboard.Auditor.Jobs;
 using Dashboard.Core.Contracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Dashboard.Tests.Auditor;
 
@@ -230,6 +234,39 @@ public sealed class AuditorApiTests : IDisposable
     {
         using var f = Create(("AUDITOR_ENGINE", "openai"), ("AUDITOR_TOKEN", "x"));
         Assert.ThrowsAny<Exception>(() => f.CreateClient());
+    }
+
+    private sealed class FailingEngine : IAuditEngine
+    {
+        public string Name => "failing";
+        public Task<AuditorStatus> GetStatusAsync(CancellationToken cancellationToken) => Task.FromResult(new AuditorStatus { Engine = Name });
+        public Task<AuditEngineResult> RunAuditAsync(AuditRequest request, CancellationToken cancellationToken) =>
+            throw new AuditEngineException("model exploded", "[partial transcript]");
+        public Task<TextTaskResponse> RunTextAsync(TextTaskRequest request, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Copilot not authenticated");
+    }
+
+    [Fact]
+    public async Task Engine_failures_are_reported_with_transcript()
+    {
+        using var f = _factory.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.RemoveAll<IAuditEngine>();
+            s.AddSingleton<IAuditEngine, FailingEngine>();
+        }));
+        var c = f.CreateClient();
+        c.DefaultRequestHeaders.Add("X-Auditor-Token", Token);
+
+        Assert.Equal(HttpStatusCode.Accepted, (await c.PostAsJsonAsync("/audits", Request(Path.Combine(_root.Path, "x"), "boom"))).StatusCode);
+        var done = await PollAsync(c, "boom");
+        Assert.Equal("failed", done.Status);
+        Assert.Equal("model exploded", done.Error);
+        Assert.Equal("[partial transcript]", done.Transcript);
+        Assert.NotNull(done.CompletedAt);
+
+        var text = await c.PostAsJsonAsync("/text", new TextTaskRequest { Kind = "template-summary", Input = "x" });
+        Assert.Equal(HttpStatusCode.BadGateway, text.StatusCode);
+        Assert.Contains("not authenticated", await text.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
     private static async Task<AuditStatusResponse> PollAsync(HttpClient c, string id)

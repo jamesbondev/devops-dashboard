@@ -47,19 +47,18 @@ public sealed class AuditWorker(
             store.MarkSucceeded(job, result.Result, result.Transcript, result.Model, result.PromptHash);
             logger.LogInformation("Audit {AuditId} succeeded with model {Model}", request.AuditId, result.Model);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
+        catch (Exception ex) when (stoppingToken.IsCancellationRequested)
         {
-            store.MarkFailed(job, $"audit timed out after {request.TimeoutMinutes} minutes");
-            logger.LogWarning("Audit {AuditId} timed out", request.AuditId);
+            store.MarkFailed(job, "auditor is shutting down", (ex as AuditEngineException)?.Transcript);
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (Exception ex) when (timeout.IsCancellationRequested)
         {
-            store.MarkFailed(job, "auditor is shutting down");
+            store.MarkFailed(job, $"audit timed out after {request.TimeoutMinutes} minutes", (ex as AuditEngineException)?.Transcript);
+            logger.LogWarning("Audit {AuditId} timed out", request.AuditId);
         }
         catch (Exception ex)
         {
-            var transcript = ex is AuditEngineException aee ? aee.Transcript : null;
-            store.MarkFailed(job, ex.Message, transcript);
+            store.MarkFailed(job, ErrorText.Summarise(ex), (ex as AuditEngineException)?.Transcript);
             logger.LogError(ex, "Audit {AuditId} failed", request.AuditId);
         }
     }

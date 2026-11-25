@@ -95,7 +95,7 @@ public static partial class AuditorEndpoints
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 loggers.CreateLogger("Dashboard.Auditor.Text").LogError(ex, "Text task {Kind} failed", request.Kind);
-                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status502BadGateway);
+                return Results.Json(new { error = ErrorText.Summarise(ex) }, statusCode: StatusCodes.Status502BadGateway);
             }
         });
     }
