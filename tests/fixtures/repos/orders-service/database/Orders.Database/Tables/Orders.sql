@@ -1,0 +1,6 @@
+CREATE TABLE [dbo].[Orders]
+(
+    [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    [CustomerId] NVARCHAR(64) NOT NULL,
+    [Total] DECIMAL(18, 2) NOT NULL
+);

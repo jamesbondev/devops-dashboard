@@ -1,0 +1,32 @@
+trigger:
+  branches:
+    include: [main]
+  paths:
+    include: [terraform/*]
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/pipeline-templates
+      ref: refs/heads/next
+
+extends:
+  template: templates/terraform.yml@templates
+  parameters:
+    workingDirectory: terraform
+    stages:
+      - stage: Plan
+        jobs:
+          - job: Plan
+            steps:
+              - script: terraform plan
+      - stage: Apply
+        jobs:
+          - deployment: Apply
+            environment: platform-prod
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - template: steps/terraform-apply.yml@templates

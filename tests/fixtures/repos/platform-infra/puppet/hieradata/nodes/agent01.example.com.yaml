@@ -1,0 +1,3 @@
+---
+profile::agent::count: 2
+profile::agent::labels: [linux, docker]

@@ -1,0 +1,25 @@
+trigger:
+  branches:
+    include:
+      - main
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/pipeline-templates
+      ref: refs/heads/main
+
+extends:
+  template: templates/service.yml@templates
+  parameters:
+    serviceName: orders
+    skaffoldFile: skaffold.yaml
+    dacpac:
+      project: database/Orders.Database/Orders.Database.sqlproj
+      task: SqlAzureDacpacDeployment
+    environments:
+      - name: dev
+        environment: orders-dev
+      - name: prod
+        environment: orders-prod

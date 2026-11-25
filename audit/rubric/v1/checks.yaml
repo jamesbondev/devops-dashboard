@@ -1,0 +1,171 @@
+# Audit rubric v1.
+# kind: fact      -> evaluated deterministically by the app from RepoFacts (FactCheckEvaluator).
+# kind: judgement -> sent to the auditor (LLM), which must cite evidence files for every finding.
+# severity: low | medium | high. High-severity open *fact* findings block the Gold tier (AUD-001).
+# Team-specific checks can be added in audit/rubric/team/*.yaml with the same schema; they are appended.
+# Changing any check text changes the rubric hash and re-baselines finding comparisons.
+version: "v1"
+checks:
+  - id: ARCH-001
+    area: architecture
+    title: Architecture style identified with evidence
+    severity: medium
+    kind: judgement
+    description: >
+      Identify the dominant architecture style of the repository (layered, clean, vertical-slice, hexagonal,
+      microservice, modular-monolith, other) and justify it with concrete evidence: project/folder structure,
+      project references, namespaces and where business logic, persistence and transport code live.
+      The style should be recognisable and applied consistently across the codebase.
+    guidance: |
+      pass: one style is clearly and consistently applied; cite at least 3 files/projects that show the structure
+        (e.g. Domain/Application/Infrastructure/Api projects with matching responsibilities).
+      partial: a style is intended but applied inconsistently (some features bypass layers, mixed conventions,
+        logic in controllers in some places but not others); cite the inconsistent spots.
+      fail: no discernible structure (business logic, data access and HTTP/messaging code intermixed), or the
+        structure contradicts itself; cite examples.
+      na: repository contains no application code (pure infrastructure/config).
+
+  - id: ARCH-002
+    area: architecture
+    title: Dependencies point inward
+    severity: medium
+    kind: judgement
+    description: >
+      Check dependency direction. Domain/core code must not depend on infrastructure, persistence, transport or
+      framework concerns; outer layers depend on inner layers, never the reverse. Use ProjectReferences from the
+      facts plus using-directives and constructor dependencies to verify.
+    guidance: |
+      pass: inner projects (Domain/Core/Application) reference no infrastructure packages or projects
+        (EF Core, Service Bus, ASP.NET Core, HTTP clients); abstractions are owned by the inner layer.
+      partial: direction is mostly correct but there are isolated leaks (e.g. an EF attribute or a DbContext
+        reference in the application layer, a domain type referencing a transport DTO); cite each leak.
+      fail: inner layers reference infrastructure projects/packages directly, or there are project reference
+        cycles; or there is a single project mixing everything with no seams.
+      na: single small project where layering is not meaningful (e.g. a tiny worker under ~500 lines).
+
+  - id: NET-001
+    area: dotnet
+    title: Supported .NET target frameworks
+    severity: high
+    kind: fact
+    description: >
+      Every .NET project targets a framework that is in Microsoft support today. As of 2026-11-25 only net10.0
+      (LTS, until 2028-11-10) is supported; net8.0 and net9.0 reached end of support on 2026-11-10. net7.0 and
+      older, netcoreapp*, and .NET Framework 4.x are flagged. netstandard2.0/2.1 libraries are acceptable.
+    guidance: |
+      pass: no project targets an unsupported or legacy framework.
+      partial: every project has at least one supported target, but some still multi-target an unsupported one.
+      fail: at least one project targets only unsupported/legacy frameworks.
+      na: no .NET projects.
+
+  - id: NET-002
+    area: dotnet
+    title: Central package management
+    severity: low
+    kind: fact
+    description: >
+      NuGet package versions are managed centrally with Directory.Packages.props and
+      ManagePackageVersionsCentrally=true, so every project uses the same version of each package and upgrades
+      happen in one place.
+    guidance: |
+      pass: all .NET projects are covered by a Directory.Packages.props with CPM enabled.
+      partial: CPM covers only some projects, or the repo has a single project without CPM.
+      fail: two or more projects and none use CPM (versions declared per project).
+      na: no .NET projects.
+
+  - id: K8S-001
+    area: kubernetes
+    title: Resource requests and limits set
+    severity: medium
+    kind: fact
+    description: >
+      Every container in every Kubernetes workload (Deployment, StatefulSet, DaemonSet, Job, CronJob) declares
+      resources.requests (scheduling) and resources.limits (at least memory, to contain leaks and noisy
+      neighbours). For Helm templates the chart's values.yaml is consulted where resources are injected.
+    guidance: |
+      pass: all containers of the workload set both requests and limits.
+      partial: some containers, or only one of requests/limits, are set.
+      fail: no container in the workload sets requests or limits.
+      na: no Kubernetes workloads in the repository.
+
+  - id: K8S-002
+    area: kubernetes
+    title: Liveness and readiness probes
+    severity: medium
+    kind: fact
+    description: >
+      Long-running workloads (Deployment, StatefulSet, DaemonSet) define both a readinessProbe (traffic only to
+      ready pods, safe rollouts) and a livenessProbe (restart wedged processes) on every container. Jobs and
+      CronJobs are exempt.
+    guidance: |
+      pass: every container defines both probes.
+      partial: only one probe type, or only some containers, have probes.
+      fail: no probes on the workload.
+      na: no long-running Kubernetes workloads.
+
+  - id: DOCK-001
+    area: docker
+    title: Dockerfile best practices
+    severity: medium
+    kind: fact
+    description: >
+      Dockerfiles use a multi-stage build (SDK image to build, slim runtime image to run), pin base images to an
+      explicit tag or digest (never :latest or untagged) and run as a non-root USER in the final stage.
+      HEALTHCHECK is informational only (Kubernetes probes are preferred).
+    guidance: |
+      pass: multi-stage, all base images pinned, non-root final stage.
+      partial: one or two of the three practices are missing.
+      fail: single-stage, unpinned base image and running as root.
+      na: no Dockerfiles.
+
+  - id: DATA-001
+    area: data
+    title: Data access is consistent and isolated
+    severity: medium
+    kind: judgement
+    description: >
+      The repository uses one deliberate data-access approach per database (e.g. EF Core with migrations, Dapper
+      with DbUp, or a .sqlproj/dacpac schema) and keeps it isolated behind a boundary (infrastructure project,
+      repositories or query handlers). Schema changes are versioned (migrations or sqlproj) and deployed by the
+      pipeline. Connection strings come from configuration/Key Vault, never source code.
+    guidance: |
+      pass: a single coherent approach per database, confined to a data/infrastructure project; schema is
+        versioned (migrations folder or .sqlproj); no raw connection strings or SQL in controllers/handlers.
+      partial: mostly consistent, but with leaks (DbContext or SQL used from API/controllers, two ORMs for the same
+        database without a clear reason, or both EF migrations and a .sqlproj owning the same schema).
+      fail: data access scattered across layers, multiple competing approaches, unversioned schema changes, or
+        credentials in source.
+      na: the repository does not access a database.
+
+  - id: MSG-001
+    area: messaging
+    title: Retries and dead-letter handling are explicit
+    severity: high
+    kind: judgement
+    description: >
+      Message consumers (Service Bus processors, MassTransit/NServiceBus consumers, Functions triggers) make
+      failure handling explicit: bounded retries with backoff, idempotent processing, poison messages
+      dead-lettered with a reason (or MaxDeliveryCount configured), and the dead-letter queue monitored or
+      processed. Exceptions must not be silently swallowed and messages must not be completed before work succeeds.
+    guidance: |
+      pass: retry policy and dead-letter behaviour are configured explicitly (code or infra), handlers complete
+        or dead-letter messages deliberately with a reason, and there is evidence of DLQ handling/monitoring.
+      partial: defaults are relied on (e.g. implicit MaxDeliveryCount with no DLQ processing), or handling is
+        explicit for some consumers but not others.
+      fail: errors are swallowed, messages are auto-completed before processing succeeds, or there is no retry
+        or dead-letter strategy at all.
+      na: the repository does not consume messages.
+
+  - id: TEST-001
+    area: testing
+    title: A test project for each deployable
+    severity: medium
+    kind: fact
+    description: >
+      Every deployable .NET project (Web, Worker, Functions, Console) has at least one test project that
+      references it directly (or is named after it, e.g. Orders.Api.Tests).
+    guidance: |
+      pass: a test project references the deployable directly.
+      partial: only the deployable's dependencies (e.g. Application/Domain) are tested.
+      fail: no test project covers the deployable or its dependencies.
+      na: no deployable .NET projects.

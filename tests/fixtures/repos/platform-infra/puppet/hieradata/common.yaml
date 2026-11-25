@@ -1,0 +1,8 @@
+---
+profile::base::ntp_servers:
+  - 0.pool.ntp.org
+  - 1.pool.ntp.org
+profile::base::timezone: UTC
+profile::agent::dotnet_sdk: "10.0.100"
+profile::agent::docker_version: "27.3"
+profile::agent::pool: platform

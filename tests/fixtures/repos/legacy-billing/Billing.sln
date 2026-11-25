@@ -1,0 +1,8 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Billing.Web", "src\Billing.Web\Billing.Web.csproj", "{6F1A0C1E-1111-4C2B-9C67-0D7D3D4C0001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Billing.Core", "src\Billing.Core\Billing.Core.csproj", "{6F1A0C1E-1111-4C2B-9C67-0D7D3D4C0002}"
+EndProject
+Global
+EndGlobal

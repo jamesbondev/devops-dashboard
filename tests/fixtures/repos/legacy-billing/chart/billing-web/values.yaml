@@ -1,0 +1,5 @@
+replicaCount: 1
+image:
+  repository: legacyacr.azurecr.io/billing-web
+  tag: latest
+resources: {}
