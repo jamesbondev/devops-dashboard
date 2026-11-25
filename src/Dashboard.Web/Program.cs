@@ -29,7 +29,10 @@ services.AddDbContext<DashboardDbContext>(o => o.UseSqlite(DatabaseInitializer.C
 
 // Azure DevOps (mock or live; switching mode requires a restart)
 services.AddTransient<ThrottlingHandler>();
-services.AddHttpClient<LiveAdoClient>().AddHttpMessageHandler<ThrottlingHandler>();
+// Long-lived typed clients (held by singletons): rotate pooled connections so DNS changes are picked up.
+services.AddHttpClient<LiveAdoClient>()
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(10) })
+    .AddHttpMessageHandler<ThrottlingHandler>();
 services.AddSingleton<MockAdoClient>();
 services.AddSingleton<IAdoClient>(sp =>
 {
@@ -51,7 +54,8 @@ services.AddSingleton<InsightsService>();
 services.AddSingleton<WeeklyService>();
 
 // Audit pipeline
-services.AddHttpClient<AuditorClient>();
+services.AddHttpClient<AuditorClient>()
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(10) });
 services.AddHttpClient("nuget");
 services.AddSingleton<IPackageMetadataProvider>(sp =>
 {

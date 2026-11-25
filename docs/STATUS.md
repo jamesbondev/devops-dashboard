@@ -71,6 +71,14 @@ Every phase in [plan.md](plan.md) is implemented and tested against **mock** Azu
 | Busy repos | The default 90-day build backfill at 300 timelines per pass may take a while. It proceeds in the background and Now works throughout. |
 | Auditor image size | About 930 MB, including a probably-unneeded second copy of the runtime. Prune it after a real run proves in-process mode works. |
 
+Additional risks from the live-client review (all endpoints checked against the 7.1 docs; 16 fixture-based parsing tests):
+- **Undocumented shapes** — the tests pin them, but verify each against one real PR and one real run:
+  - the PR "published" time from `IsDraftUpdate` threads, and the voter identity from `CodeReviewVotedByIdentity`
+  - the approvals `pipeline.owner.id` (= build id)
+  - previous-attempt timelines via `timeline/{timelineId}`
+- **Entra (AAD) groups** may not appear in expanded identity membership. If so, group-assigned approvals won't count as "mine".
+- **TSTU usage** can't be measured exactly. ADO only sends `X-RateLimit-*` headers near the limit; the Jobs page shows "rate-limit remaining" when reported.
+
 ## Mock mode
 
 `ADO_MODE=mock` (default) serves a deterministic synthetic organisation, which is useful for UI work and demos:

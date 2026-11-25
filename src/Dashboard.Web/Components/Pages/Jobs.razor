@@ -18,7 +18,7 @@
 
 <div class="kpis" style="margin-bottom:1rem">
     <div class="kpi"><div class="label">API calls (process)</div><div class="value">@Stats.Calls</div></div>
-    <div class="kpi"><div class="label">TSTU used (process)</div><div class="value">@Stats.Tstu.ToString("0.#")</div><div class="sub">budget 200 / 5 min sliding</div></div>
+    <div class="kpi"><div class="label">TSTU used (process)</div><div class="value">@(Stats.Tstu > 0 ? Stats.Tstu.ToString("0.#") : "n/a")</div><div class="sub">ADO reports usage only via X-RateLimit headers near the limit (200 / 5 min)</div></div>
     <div class="kpi"><div class="label">Rate-limit remaining</div><div class="value">@(Stats.LastRemaining?.ToString("0") ?? "—")</div><div class="sub">limit @(Stats.LastLimit?.ToString("0") ?? "—")</div></div>
     <div class="kpi"><div class="label">Throttle events</div><div class="value @(Stats.Throttled > 0 ? "warnc" : "")">@Stats.Throttled</div></div>
     <div class="kpi"><div class="label">Running now</div><div class="value small">@(Signals.Running ?? "idle")</div></div>
