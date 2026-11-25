@@ -1,5 +1,7 @@
 # DevOps Dashboard — Implementation Plan (v2, 2026-11-25)
 
+> **Status:** all phases implemented against mock ADO/Copilot — see [STATUS.md](STATUS.md) for what was built, deviations, and the first-live-run checklist.
+
 The background research, decisions and review notes are in [research.md](research.md) (§4 = decisions, §6 = review synthesis). This document covers **what to build and in what order**.
 
 **v2 changes** (from the Fable plan review, which checked the API and SDK claims against current docs):
