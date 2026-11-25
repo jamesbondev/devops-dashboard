@@ -14,7 +14,8 @@ COPY src/Dashboard.Web/Dashboard.Web.csproj src/Dashboard.Web/
 RUN dotnet restore src/Dashboard.Web/Dashboard.Web.csproj
 COPY src/Dashboard.Core/ src/Dashboard.Core/
 COPY src/Dashboard.Web/ src/Dashboard.Web/
-RUN dotnet publish src/Dashboard.Web/Dashboard.Web.csproj -c Release --no-restore -p:UseAppHost=false -o /app
+RUN dotnet publish src/Dashboard.Web/Dashboard.Web.csproj -c Release -p:UseAppHost=false -o /app \
+ && test -f /app/wwwroot/_framework/blazor.web.js || (echo "blazor.web.js missing from publish output" && ls -R /app/wwwroot && exit 1)
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 # git: partial clones + worktrees of audited repos (never builds or runs repo code). curl: healthcheck.
