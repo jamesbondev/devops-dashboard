@@ -1,0 +1,142 @@
+@using Dashboard.Core.Contracts
+@using System.Text.Json
+@inject FindingsService FindingsSvc
+@inject IClock Clock
+
+@{
+    var latest = Detail.Audits.FirstOrDefault(a => a.Status == AuditStatus.Succeeded);
+    var running = Detail.Audits.FirstOrDefault(a => a.Status is AuditStatus.Queued or AuditStatus.Running);
+    var failedLast = Detail.Audits.FirstOrDefault() is { Status: AuditStatus.Failed } f0 ? f0 : null;
+}
+<div class="row" style="margin-bottom:.75rem">
+    <button class="primary" @onclick="AuditNow" disabled="@(_queued || running is not null)">@(running is not null ? $"Audit {running.Status.ToString().ToLowerInvariant()}…" : _queued ? "Queued…" : "Audit now")</button>
+    <span class="muted small">Audits re-run automatically when the default branch moves (at most once per @Config.Current.Audit.MinHoursBetweenAudits h unless build/deploy files change). Facts are computed statically; Copilot judges the rest with read-only access to an immutable worktree.</span>
+</div>
+@if (failedLast is not null) { <div class="banner warn">Last audit failed <Ago At="failedLast.CompletedAt" />: @failedLast.Error</div> }
+
+@if (latest is null) { <div class="empty">No completed audit yet.</div> }
+else
+{
+    <div class="grid-2">
+        <section class="panel">
+            <header><h2>Latest audit</h2><span class="meta">@Dashboard.Web.Services.Fmt.ShortSha(latest.Sha) · <Ago At="latest.CompletedAt" /> · @latest.Engine @latest.Model · rubric @latest.RubricVersion @(latest.Votes > 1 ? $"· {latest.Votes} votes" : "") @if (latest.IsBaseline) { <span class="badge info" title="Model, rubric or prompt changed — not compared with earlier audits">baseline</span> }</span></header>
+            <p><b>Architecture:</b> <span class="badge info">@latest.ArchitectureStyle</span></p>
+            @if (Result(latest) is { } r)
+            {
+                <p class="small">@r.ArchitectureRationale</p>
+                @if (r.ArchitectureEvidence.Count > 0) { <div class="small muted">Evidence: @string.Join(", ", r.ArchitectureEvidence.Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")))</div> }
+                <h3>Summary</h3><p>@r.Summary</p>
+                @if (r.AzureDependencies.Count > 0) { <p><b>Azure dependencies:</b> @string.Join(", ", r.AzureDependencies)</p> }
+            }
+        </section>
+        <section class="panel">
+            <header><h2>Since previous audit</h2></header>
+            @{
+                var prev = Detail.Audits.Where(a => a.Status == AuditStatus.Succeeded && a.Id != latest.Id).FirstOrDefault();
+                var newCount = Detail.Findings.Count(x => x.State is { } s && prev is not null && s.FirstSeen > prev.CompletedAt);
+                var openCount = Detail.Findings.Count(x => x.State?.Status is FindingStatus.New or FindingStatus.Accepted);
+            }
+            <div class="kpis">
+                <div class="kpi"><div class="label">Open findings</div><div class="value">@openCount</div></div>
+                <div class="kpi"><div class="label">New since previous</div><div class="value">@(prev is null ? "—" : newCount.ToString())</div></div>
+                <div class="kpi"><div class="label">Checks passing</div><div class="value good">@Detail.Findings.Count(x => x.Finding.Result == CheckResult.Pass)</div></div>
+            </div>
+            @if (latest.IsBaseline) { <p class="small muted">This audit is a new baseline (model/rubric/prompt changed); "new" counts start from here.</p> }
+        </section>
+    </div>
+
+    <section class="panel" style="margin-top:1rem">
+        <header><h2>Checks &amp; findings</h2><span class="meta"><label><input type="checkbox" @bind="_hidePass" /> hide passing</label></span></header>
+        <table class="t">
+            <thead><tr><th>Check</th><th>Result</th><th>Severity</th><th>Finding</th><th>Evidence</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var row in Detail.Findings.Where(x => !_hidePass || x.Finding.Result is not (CheckResult.Pass or CheckResult.NotApplicable)))
+            {
+                var fnd = row.Finding;
+                <tr>
+                    <td><code>@fnd.CheckId</code><div class="small muted">@fnd.Title</div>@if (fnd.Component is not null) { <span class="chip">@fnd.Component</span> }</td>
+                    <td>@ResultBadge(fnd.Result) @if (fnd.Uncertain) { <span class="badge warn" title="votes disagreed or evidence could not be verified">uncertain</span> } <span class="muted small">@fnd.Kind</span></td>
+                    <td><span class="badge @(fnd.Severity == "high" ? "bad" : fnd.Severity == "medium" ? "warn" : "")">@fnd.Severity</span></td>
+                    <td class="small">@fnd.Explanation @if (!string.IsNullOrWhiteSpace(fnd.Recommendation)) { <div><b>Do:</b> @fnd.Recommendation</div> }</td>
+                    <td class="small mono">@string.Join(", ", Evidence(fnd).Take(4))</td>
+                    <td>@if (row.State is { } st) { <span class="badge @(st.Status == FindingStatus.Done ? "ok" : st.Status == FindingStatus.Dismissed ? "" : "warn")" title="@st.Reason">@st.Status</span> }</td>
+                    <td class="nowrap">
+                        @if (row.State is { } s2 && fnd.Result is CheckResult.Fail or CheckResult.Partial)
+                        {
+                            @if (s2.Status == FindingStatus.New) { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.Accepted, null)">Accept</button> }
+                            @if (s2.Status != FindingStatus.Dismissed)
+                            {
+                                <select @bind="_reason[s2.Fingerprint]"><option value="">dismiss…</option><option>won't fix</option><option>false positive</option><option>not applicable</option></select>
+                                <button disabled="@(string.IsNullOrEmpty(_reason.GetValueOrDefault(s2.Fingerprint)))" @onclick="() => Set(s2.Fingerprint, FindingStatus.Dismissed, _reason.GetValueOrDefault(s2.Fingerprint))">Dismiss</button>
+                            }
+                            else { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.New, null)">Reopen</button> }
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </section>
+}
+
+<section class="panel" style="margin-top:1rem">
+    <header><h2>Audit history</h2></header>
+    <table class="t">
+        <thead><tr><th>When</th><th>SHA</th><th>Status</th><th>Engine / model</th><th>Rubric</th><th>Trigger</th><th class="num">Duration</th><th>Transcript</th></tr></thead>
+        <tbody>
+        @foreach (var a in Detail.Audits)
+        {
+            <tr>
+                <td><Ago At="a.CreatedAt" /></td><td class="mono">@Dashboard.Web.Services.Fmt.ShortSha(a.Sha)</td>
+                <td><span class="badge @(a.Status == AuditStatus.Succeeded ? "ok" : a.Status == AuditStatus.Failed ? "bad" : "info")">@a.Status</span> @if (a.IsBaseline) { <span class="badge info">baseline</span> }</td>
+                <td>@a.Engine @a.Model</td><td>@a.RubricVersion</td><td class="muted">@a.Trigger</td>
+                <td class="num">@(a.DurationMs is { } ms ? $"{ms / 1000.0:0}s" : "—")</td>
+                <td>@if (a.Status == AuditStatus.Succeeded) { <a href="audit/@a.Id/transcript" target="_blank">view</a> }</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public RepoDetail Detail { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Inject] ConfigService Config { get; set; } = default!;
+    private bool _queued;
+    private bool _hidePass = true;
+    private readonly Dictionary<string, string?> _reason = new();
+
+    private async Task AuditNow()
+    {
+        _queued = true;
+        await FindingsSvc.EnqueueAuditAsync(Detail.Health.Repo.Id, "manual");
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Set(string fp, FindingStatus s, string? reason)
+    {
+        await FindingsSvc.SetStatusAsync(fp, s, reason);
+        await OnChanged.InvokeAsync();
+    }
+
+    private static AuditResult? Result(AuditRun a)
+    {
+        if (a.ResultJson is null) return null;
+        try { return JsonSerializer.Deserialize<Dashboard.Core.Contracts.AuditResult>(a.ResultJson, Dashboard.Web.Ado.JsonDefaults.Web); }
+        catch (JsonException) { return null; }
+    }
+
+    private static IEnumerable<string> Evidence(Finding f)
+    {
+        try { return (JsonSerializer.Deserialize<List<Dashboard.Core.Contracts.Evidence>>(f.EvidenceJson, Dashboard.Web.Ado.JsonDefaults.Web) ?? []).Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")); }
+        catch (JsonException) { return []; }
+    }
+
+    private static MarkupString ResultBadge(CheckResult r) => new(r switch
+    {
+        CheckResult.Pass => "<span class='badge ok'>pass</span>",
+        CheckResult.Partial => "<span class='badge warn'>partial</span>",
+        CheckResult.Fail => "<span class='badge bad'>fail</span>",
+        _ => "<span class='badge'>n/a</span>",
+    });
+}

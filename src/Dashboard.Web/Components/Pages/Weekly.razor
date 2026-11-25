@@ -1,0 +1,33 @@
+@page "/weekly"
+@inherits LivePage
+@inject WeeklyService WeeklySvc
+@inject IJSRuntime JS
+
+<PageTitle>Weekly · DevOps Dashboard</PageTitle>
+<div class="row" style="margin-bottom:.5rem">
+    <h1 style="margin:0">Weekly digest</h1>
+    <span class="muted small">for retros and sprint review — no per-person data</span>
+    <span class="grow"></span>
+    <button @onclick="Copy">Copy Markdown</button>
+    <button @onclick="Download">Download .md</button>
+    <button class="primary" @onclick="Brief" disabled="@_busy">@(_busy ? "Writing…" : "Write brief with Copilot")</button>
+</div>
+@if (_brief is not null) { <section class="panel" style="margin-bottom:1rem"><header><h2>Brief</h2></header><pre class="box">@_brief</pre></section> }
+<section class="panel"><pre class="box" style="max-height:none">@_digest</pre></section>
+
+@code {
+    private string _digest = "";
+    private string? _brief;
+    private bool _busy;
+    protected override TimeSpan RefreshEvery => TimeSpan.FromMinutes(5);
+    protected override async Task LoadAsync() => _digest = await WeeklySvc.DigestAsync();
+    private async Task Copy() { try { await JS.InvokeAsync<bool>("dash.copy", _digest); } catch (JSException) { } }
+    private async Task Download() { try { await JS.InvokeVoidAsync("dash.download", $"weekly-{Now:yyyy-MM-dd}.md", _digest); } catch (JSException) { } }
+    private async Task Brief()
+    {
+        _busy = true;
+        try { _brief = await WeeklySvc.BriefAsync(); }
+        catch (Exception ex) { _brief = "Could not write the brief: " + ex.Message; }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,85 @@
+@page "/gates"
+@inherits LivePage
+@inject IServiceScopeFactory Scopes
+@using Microsoft.EntityFrameworkCore
+@using Dashboard.Web.Data
+
+<PageTitle>Gates · DevOps Dashboard</PageTitle>
+<h1>Approvals &amp; gates</h1>
+
+<div class="grid-2">
+    <section class="panel">
+        <header><h2>Waiting for you</h2><span class="badge @(_mine.Count > 0 ? "warn" : "ok")">@_mine.Count</span></header>
+        @if (_mine.Count == 0) { <div class="empty">No approvals waiting for you.</div> }
+        <table class="t"><tbody>
+        @foreach (var a in _mine)
+        {
+            <tr><td><b>@RepoName(a.RepoId)</b> → @a.EnvironmentName<div class="small muted">@a.StageName · @(a.EscalationReason ?? a.Instructions)</div></td><td><Ago At="a.CreatedOn" /></td><td><AdoLink Href="@a.WebUrl">approve in ADO ↗</AdoLink></td></tr>
+        }
+        </tbody></table>
+    </section>
+
+    <section class="panel">
+        <header><h2>Gates that can escalate to you</h2><Info Text="Environment check configurations (read daily). An approval check naming you or one of your groups means that environment can need your approval. Environments need adoId in config for live mode." /></header>
+        @if (_checks.Count == 0) { <div class="empty">No check configurations read. Set <code>adoId</code> on environments in config/dashboard.yaml.</div> }
+        @foreach (var g in _checks.GroupBy(c => c.EnvironmentName))
+        {
+            <h3>@g.Key @if (g.Any(c => c.RequiresMe)) { <span class="badge warn">can require you</span> }</h3>
+            <table class="t"><tbody>
+            @foreach (var c in g) { <tr><td>@c.DisplayName</td><td class="muted small">@c.CheckType</td><td class="small">@c.ApproverNames</td><td>@if (c.RequiresMe) { <span class="badge warn">you</span> }</td></tr> }
+            </tbody></table>
+            <div class="small muted">Deployed to by: @string.Join(", ", _deployersByEnv.GetValueOrDefault(g.Key) ?? [])</div>
+        }
+    </section>
+
+    <section class="panel">
+        <header><h2>Escalations to you (30 days)</h2><Info Text="Approvals that were assigned to you, by pipeline — the observed view of which pipelines need your approval." /></header>
+        @if (_history.Count == 0) { <div class="empty">None observed yet (history builds up as approvals are synced).</div> }
+        <table class="t"><thead><tr><th>Repo</th><th>Environment</th><th class="num">Times</th><th>Typical reason</th><th>Last</th></tr></thead><tbody>
+        @foreach (var g in _history.GroupBy(a => (a.RepoId, a.EnvironmentName)).OrderByDescending(g => g.Count()))
+        {
+            <tr><td>@RepoName(g.Key.RepoId)</td><td>@g.Key.EnvironmentName</td><td class="num">@g.Count()</td>
+                <td class="small">@g.GroupBy(a => a.EscalationReason ?? a.Instructions).OrderByDescending(x => x.Count()).First().Key</td><td><Ago At="g.Max(a => a.CreatedOn)" /></td></tr>
+        }
+        </tbody></table>
+    </section>
+
+    <section class="panel">
+        <header><h2>All pending approvals</h2><span class="badge">@_pending.Count</span></header>
+        <table class="t"><tbody>
+        @foreach (var a in _pending)
+        {
+            <tr><td>@RepoName(a.RepoId) → @a.EnvironmentName</td><td class="small muted">@Approvers(a)</td><td><Ago At="a.CreatedOn" /></td><td><AdoLink Href="@a.WebUrl" /></td></tr>
+        }
+        </tbody></table>
+    </section>
+</div>
+
+@code {
+    private List<Approval> _mine = [], _pending = [], _history = [];
+    private List<EnvironmentCheck> _checks = [];
+    private Dictionary<string, string> _repos = [];
+    private Dictionary<string, List<string>> _deployersByEnv = [];
+
+    protected override async Task LoadAsync()
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        _repos = await db.Repos.AsNoTracking().Where(r => r.Assigned).ToDictionaryAsync(r => r.Id, r => r.Name);
+        var ids = _repos.Keys.ToList();
+        _pending = await db.Approvals.AsNoTracking().Where(a => a.Status == "pending" && a.RepoId != null && ids.Contains(a.RepoId)).OrderBy(a => a.CreatedOn).ToListAsync();
+        _mine = _pending.Where(a => a.AssignedToMe).ToList();
+        var since = Now.AddDays(-30);
+        _history = await db.Approvals.AsNoTracking().Where(a => a.AssignedToMe && a.CreatedOn >= since && a.RepoId != null && ids.Contains(a.RepoId)).ToListAsync();
+        _checks = await db.EnvironmentChecks.AsNoTracking().OrderBy(c => c.EnvironmentName).ThenByDescending(c => c.RequiresMe).ToListAsync();
+        var deps = await db.Deployments.AsNoTracking().Where(d => d.StartTime >= since && ids.Contains(d.RepoId)).Select(d => new { d.EnvironmentName, d.RepoId }).Distinct().ToListAsync();
+        _deployersByEnv = deps.GroupBy(d => d.EnvironmentName).ToDictionary(g => g.Key, g => g.Select(x => _repos.GetValueOrDefault(x.RepoId, "?")).Order().ToList());
+    }
+
+    private string RepoName(string? id) => id is null ? "?" : _repos.GetValueOrDefault(id, "?");
+    private static string Approvers(Approval a)
+    {
+        try { return string.Join(", ", System.Text.Json.JsonDocument.Parse(a.ApproversJson).RootElement.EnumerateArray().Select(x => x.TryGetProperty("displayName", out var n) ? n.GetString() : "?")); }
+        catch (System.Text.Json.JsonException) { return ""; }
+    }
+}

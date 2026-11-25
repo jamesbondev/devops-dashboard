@@ -1,0 +1,6 @@
+<span class="tier @Tier" title="@Tooltip">@Tier@if (Provisional) {<span class="prov">*</span>}</span>
+@code {
+    [Parameter] public string Tier { get; set; } = "None";
+    [Parameter] public bool Provisional { get; set; }
+    private string Tooltip => Provisional ? "Provisional: the next tier is blocked only by rules with insufficient data" : $"{Tier} tier";
+}

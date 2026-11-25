@@ -1,9 +1,132 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject SyncSignals Signals
+@inject StatusService Status
+@inject IClock Clock
+@inject NowService NowSvc
+@inject ConfigService Config
 
-@Body
+<div class="shell">
+    <header class="topbar">
+        <div class="brand">DevOps Dashboard @if (_status?.Mock == true) { <span class="mode" title="Synthetic data — set azureDevOps.mode: live and ADO_PAT to use real data">MOCK DATA</span> }</div>
+        <nav class="nav">
+            <NavLink href="" Match="NavLinkMatch.All">Now @if (_attention > 0) { <span class="count">@_attention</span> }</NavLink>
+            <NavLink href="repos">Health</NavLink>
+            <NavLink href="gates">Gates</NavLink>
+            <NavLink href="findings">Findings</NavLink>
+            <NavLink href="insights">Insights</NavLink>
+            <NavLink href="weekly">Weekly</NavLink>
+            <NavLink href="jobs">Jobs</NavLink>
+            <NavLink href="settings">Settings</NavLink>
+        </nav>
+        <div class="tools">
+            <input id="jump" class="jump" list="repo-list" placeholder="Jump to repo  ( / )" @bind="_jump" @bind:event="oninput" @onkeydown="JumpKey" />
+            <datalist id="repo-list">
+                @foreach (var r in _status?.RepoNames ?? []) { <option value="@r" /> }
+            </datalist>
+            <span class="small muted nowrap" title="@FreshnessTitle">
+                @if (Signals.Running is { } running) { <span class="dot info pulse"></span> <span>syncing @running…</span> }
+                else if (_status?.LastHot is { } hot) { <span class="dot @(Clock.UtcNow - hot > TimeSpan.FromMinutes(5) ? "warn" : "ok")"></span> <span>synced <Ago At="hot" /></span> }
+                else { <span class="dot"></span> <span>not synced yet</span> }
+            </span>
+            <button title="Presentation mode (large font, hides names)" @onclick="TogglePresent">@(_present ? "⤡" : "⤢")</button>
+        </div>
+    </header>
+    <main class="content">
+        @if (_status is { } s)
+        {
+            @if (s.AuthFailed) { <div class="banner bad">Azure DevOps rejected the PAT (expired, revoked or wrong organisation). Update <code>ADO_PAT</code> in <code>.env</code> and restart. <a href="settings">Setup</a></div> }
+            else if (s.MissingPat) { <div class="banner bad">Live mode is on but <code>ADO_PAT</code> is not set. Add it to <code>.env</code> and restart, or set <code>azureDevOps.mode: mock</code>.</div> }
+            @if (s.Throttled) { <div class="banner warn">Azure DevOps is throttling requests (TSTU budget). Sync is backing off; your own ADO browsing may feel slow.</div> }
+            @if (s.ConfigErrors.Count > 0) { <div class="banner warn">Config reload rejected: @string.Join("; ", s.ConfigErrors) — still using the last valid config. <a href="settings">Settings</a></div> }
+        }
+        @Body
+    </main>
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    An unhandled error has occurred. <a href="." class="reload">Reload</a> <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private StatusSnapshot? _status;
+    private int _attention;
+    private string _jump = "";
+    private bool _present;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Signals.DataChanged += OnChanged;
+        await RefreshAsync();
+        _timer = new Timer(_ => _ = InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); }), null, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(15));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { _present = await JS.InvokeAsync<bool>("dash.getPresent"); if (_present) await JS.InvokeVoidAsync("dash.setPresent", true); StateHasChanged(); }
+            catch (JSException) { }
+        }
+        try { await JS.InvokeVoidAsync("dash.setTitle", _attention); } catch (Exception ex) when (ex is JSException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _status = await Status.GetAsync();
+        try
+        {
+            var now = await NowSvc.BuildAsync(null);
+            _attention = now.Attention.Count(a => a.Kind is AttentionKind.ApprovalForMe or AttentionKind.MainRed or AttentionKind.ProductionDeployFailed);
+            await NotifyAsync(now);
+        }
+        catch (Exception) { /* page shows errors; badge is best effort */ }
+    }
+
+    private async Task NotifyAsync(NowModel now)
+    {
+        var n = Config.Current.Notifications;
+        if (!n.Enabled) return;
+        foreach (var a in now.Attention)
+        {
+            var send = a.Kind switch
+            {
+                AttentionKind.ApprovalForMe => n.ApprovalWaitingForMe,
+                AttentionKind.ProductionDeployFailed => n.ProductionDeployFailed,
+                AttentionKind.MainRed => (Clock.UtcNow - a.Since).TotalHours >= n.MainRedHours,
+                _ => false,
+            };
+            if (!send) continue;
+            try { await JS.InvokeVoidAsync("dash.notify", $"{a.Kind}:{a.RepoId}:{a.Since.ToUnixTimeSeconds()}", a.Title, a.Detail); }
+            catch (Exception ex) when (ex is JSException or InvalidOperationException or TaskCanceledException) { }
+        }
+    }
+
+    private void OnChanged() => _ = InvokeAsync(async () => { await RefreshAsync(); StateHasChanged(); });
+
+    private void JumpKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_jump)) return;
+        var match = _status?.RepoNames.FirstOrDefault(r => r.Equals(_jump, StringComparison.OrdinalIgnoreCase))
+                    ?? _status?.RepoNames.FirstOrDefault(r => r.Contains(_jump, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) { _jump = ""; Nav.NavigateTo($"repo/{Uri.EscapeDataString(match)}"); }
+    }
+
+    private async Task TogglePresent()
+    {
+        _present = !_present;
+        try { await JS.InvokeVoidAsync("dash.setPresent", _present); } catch (JSException) { }
+    }
+
+    private string FreshnessTitle => _status is null ? "" :
+        $"Hot: {_status.LastHot?.ToString("u") ?? "never"}\nWarm: {_status.LastWarm?.ToString("u") ?? "never"}\nDaily: {_status.LastDaily?.ToString("u") ?? "never"}\nAPI calls: {_status.ApiCalls}  TSTU: {_status.Tstu:0.#}";
+
+    public void Dispose()
+    {
+        Signals.DataChanged -= OnChanged;
+        _timer?.Dispose();
+    }
+}

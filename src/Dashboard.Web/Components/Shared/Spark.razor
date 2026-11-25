@@ -1,0 +1,48 @@
+@* Minimal SVG sparkline; null values are gaps. *@
+@if (Points.Count(p => p is not null) >= 2)
+{
+    <svg class="spark" width="@Width" height="@Height" viewBox="0 0 @Width @Height" role="img" aria-label="@Label">
+        <title>@Label</title>
+        @foreach (var seg in Segments())
+        {
+            <polyline fill="none" stroke="@Color" stroke-width="1.6" points="@seg" />
+        }
+        @if (Markers is not null)
+        {
+            @foreach (var m in Markers)
+            {
+                <line x1="@X(m)" x2="@X(m)" y1="0" y2="@Height" stroke="var(--warn)" stroke-dasharray="2,2" stroke-width="1" />
+            }
+        }
+    </svg>
+}
+else { <span class="muted small">—</span> }
+@code {
+    [Parameter] public IReadOnlyList<double?> Points { get; set; } = [];
+    [Parameter] public int Width { get; set; } = 110;
+    [Parameter] public int Height { get; set; } = 26;
+    [Parameter] public string Color { get; set; } = "var(--accent)";
+    [Parameter] public double? Min { get; set; }
+    [Parameter] public double? Max { get; set; }
+    [Parameter] public string Label { get; set; } = "trend";
+    /// <summary>Fractional x positions (0..1) for vertical markers (e.g. template releases).</summary>
+    [Parameter] public IReadOnlyList<double>? Markers { get; set; }
+
+    private double X(double frac) => Math.Round(frac * (Width - 2) + 1, 1);
+
+    private IEnumerable<string> Segments()
+    {
+        var vals = Points.Where(p => p is not null).Select(p => p!.Value).ToList();
+        var lo = Min ?? vals.Min(); var hi = Max ?? vals.Max();
+        if (hi - lo < 1e-9) { hi = lo + 1; }
+        var cur = new List<string>();
+        for (var i = 0; i < Points.Count; i++)
+        {
+            if (Points[i] is not { } v) { if (cur.Count > 1) yield return string.Join(' ', cur); cur.Clear(); continue; }
+            var x = Points.Count == 1 ? 0 : i * (Width - 2.0) / (Points.Count - 1) + 1;
+            var y = Height - 2 - (v - lo) / (hi - lo) * (Height - 4);
+            cur.Add($"{x:0.#},{y:0.#}");
+        }
+        if (cur.Count > 1) yield return string.Join(' ', cur);
+    }
+}

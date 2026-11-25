@@ -1,0 +1,67 @@
+@page "/jobs"
+@inherits LivePage
+@inject IServiceScopeFactory Scopes
+@inject Dashboard.Web.Ado.AdoApiStats Stats
+@inject RepoAdminService Admin
+@using Microsoft.EntityFrameworkCore
+@using Dashboard.Web.Data
+
+<PageTitle>Jobs · DevOps Dashboard</PageTitle>
+<div class="row" style="margin-bottom:.5rem">
+    <h1 style="margin:0">Jobs &amp; sync</h1>
+    <span class="grow"></span>
+    <button @onclick='() => Admin.EnqueueAsync("hot")'>Sync now (hot)</button>
+    <button @onclick='() => Admin.EnqueueAsync("warm")'>Sync history (warm)</button>
+    <button @onclick='() => Admin.EnqueueAsync("daily")'>Run daily</button>
+    <button @onclick="TogglePause">@(Signals.Paused ? "Resume scheduler" : "Pause scheduler")</button>
+</div>
+
+<div class="kpis" style="margin-bottom:1rem">
+    <div class="kpi"><div class="label">API calls (process)</div><div class="value">@Stats.Calls</div></div>
+    <div class="kpi"><div class="label">TSTU used (process)</div><div class="value">@Stats.Tstu.ToString("0.#")</div><div class="sub">budget 200 / 5 min sliding</div></div>
+    <div class="kpi"><div class="label">Rate-limit remaining</div><div class="value">@(Stats.LastRemaining?.ToString("0") ?? "—")</div><div class="sub">limit @(Stats.LastLimit?.ToString("0") ?? "—")</div></div>
+    <div class="kpi"><div class="label">Throttle events</div><div class="value @(Stats.Throttled > 0 ? "warnc" : "")">@Stats.Throttled</div></div>
+    <div class="kpi"><div class="label">Running now</div><div class="value small">@(Signals.Running ?? "idle")</div></div>
+</div>
+@if (Stats.LastError is not null) { <div class="banner warn">Last API error <Ago At="Stats.LastErrorAt" />: @Stats.LastError</div> }
+
+<div class="grid-2">
+<section class="panel">
+    <header><h2>Sources</h2></header>
+    <table class="t"><thead><tr><th>Cursor</th><th>Last success</th><th>Last error</th></tr></thead><tbody>
+    @foreach (var c in _cursors) { <tr><td class="mono small">@CursorName(c.Key)</td><td><Ago At="c.LastSuccessAt" /></td><td class="small @(c.LastErrorAt > c.LastSuccessAt ? "bad" : "muted")">@if (c.LastErrorAt is not null) { <Ago At="c.LastErrorAt" /> <span>@c.LastError</span> }</td></tr> }
+    </tbody></table>
+</section>
+<section class="panel">
+    <header><h2>Job history (14 days)</h2></header>
+    <table class="t"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
+    @foreach (var j in _jobs)
+    {
+        <tr><td>@j.Type <span class="muted small">@RepoName(j.Payload)</span></td>
+            <td><span class="badge @(j.Status == JobStatus.Succeeded ? "ok" : j.Status == JobStatus.Failed ? "bad" : "info")">@j.Status</span></td>
+            <td><Ago At="j.StartedAt ?? j.CreatedAt" /></td><td class="num">@(j.DurationMs is { } d ? $"{d / 1000.0:0.#}s" : "—")</td>
+            <td class="num">@j.ApiCalls</td><td class="num">@j.TstuUsed.ToString("0.#")</td><td class="small">@(j.Error ?? j.Summary)</td></tr>
+    }
+    </tbody></table>
+</section>
+</div>
+
+@code {
+    private List<Job> _jobs = [];
+    private List<SyncCursor> _cursors = [];
+    private Dictionary<string, string> _repos = [];
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(10);
+
+    protected override async Task LoadAsync()
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        _jobs = await db.Jobs.AsNoTracking().OrderByDescending(j => j.Id).Take(150).ToListAsync();
+        _cursors = await db.SyncCursors.AsNoTracking().OrderBy(c => c.Key).ToListAsync();
+        _repos = await db.Repos.AsNoTracking().ToDictionaryAsync(r => r.Id, r => r.Name);
+    }
+
+    private string RepoName(string? id) => id is null ? "" : _repos.GetValueOrDefault(id, id);
+    private string CursorName(string key) { var i = key.IndexOf(':'); return i < 0 ? key : key[..(i + 1)] + RepoName(key[(i + 1)..]); }
+    private void TogglePause() { Signals.Paused = !Signals.Paused; if (!Signals.Paused) Signals.Wake(); }
+}

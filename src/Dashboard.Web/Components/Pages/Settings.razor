@@ -1,0 +1,137 @@
+@page "/settings"
+@inherits LivePage
+@inject RepoAdminService Admin
+@inject Dashboard.Web.Ado.IAdoClient Ado
+@inject Dashboard.Web.Audit.AuditorClient Auditor
+@inject IServiceScopeFactory Scopes
+@inject IConfiguration Env
+@inject IHostEnvironment Host
+@using Dashboard.Web.Data
+
+<PageTitle>Settings · DevOps Dashboard</PageTitle>
+<h1>Settings &amp; setup</h1>
+
+<div class="grid-2">
+    <section class="panel">
+        <header><h2>Repositories</h2><span class="meta">@_repos.Count(r => r.Assigned) assigned of @_repos.Count in <b>@Config.Current.AzureDevOps.Project</b></span></header>
+        <div class="filters">
+            <input type="search" placeholder="Search repos in the project…" @bind="_q" @bind:event="oninput" />
+            <label><input type="checkbox" @bind="_assignedOnly" /> assigned only</label>
+            <button @onclick='() => Admin.EnqueueAsync("daily")' title="Re-list repositories from Azure DevOps">Refresh list</button>
+        </div>
+        <div style="max-height:520px;overflow:auto">
+        <table class="t"><thead><tr><th></th><th>Repo</th><th>Type</th><th>Size</th><th>Backfill</th></tr></thead><tbody>
+        @foreach (var r in _repos.Where(r => (!_assignedOnly || r.Assigned) && (_q.Length == 0 || r.Name.Contains(_q, StringComparison.OrdinalIgnoreCase))))
+        {
+            <tr>
+                <td><input type="checkbox" checked="@r.Assigned" disabled="@r.IsDisabled" @onchange="e => Assign(r, (bool)e.Value!)" /></td>
+                <td>@if (r.Assigned) { <a href="repo/@Uri.EscapeDataString(r.Name)">@r.Name</a> } else { @r.Name } @if (r.IsDisabled) { <span class="badge">disabled</span> }</td>
+                <td>@if (r.Assigned) { <select value="@r.Type" @onchange="e => SetType(r, e)"><option>Service</option><option>Library</option><option>Infra</option></select> }</td>
+                <td class="muted small">@((r.SizeBytes / 1024.0 / 1024).ToString("0.#")) MB</td>
+                <td class="small">@if (r.Assigned) { if (r.BackfilledAt is { } b) { <Ago At="b" /> } else { <span class="badge info">queued</span> } }</td>
+            </tr>
+        }
+        </tbody></table>
+        </div>
+    </section>
+
+    <div class="stack">
+        <section class="panel">
+            <header><h2>Azure DevOps connection</h2><span class="meta">@(Ado.IsMock ? "mock mode (synthetic data)" : $"live: {Config.Current.AzureDevOps.Organization}/{Config.Current.AzureDevOps.Project}")</span></header>
+            <p class="small muted">PAT scopes needed (read only): Code, Build, Project and team, Test management, Identity (read), Graph (read). <code>vso.environment_manage</code> is not needed — deployments are derived from pipeline stages.</p>
+            <button @onclick="Probe" disabled="@_probing">@(_probing ? "Checking…" : "Check PAT scopes")</button>
+            @if (_probe is not null)
+            {
+                <table class="t" style="margin-top:.5rem"><tbody>
+                @foreach (var p in _probe) { <tr><td>@(p.Ok ? "✅" : "❌")</td><td>@p.Area</td><td class="mono small">@p.Scope</td><td class="small @(p.Ok ? "muted" : "bad")">@p.Detail</td></tr> }
+                </tbody></table>
+            }
+        </section>
+
+        <section class="panel">
+            <header><h2>Copilot auditor</h2></header>
+            <button @onclick="AuditorStatus" disabled="@_checkingAuditor">@(_checkingAuditor ? "Checking…" : "Check auditor")</button>
+            @if (_auditor is { } a)
+            {
+                <table class="t" style="margin-top:.5rem"><tbody>
+                    <tr><td>Engine</td><td>@a.Engine @(a.Ready ? "✅" : "❌")</td></tr>
+                    <tr><td>Authenticated</td><td>@(a.Authenticated ? "yes" : "no") @a.Login</td></tr>
+                    <tr><td>Selected model</td><td>@a.SelectedModel</td></tr>
+                    <tr><td>Models</td><td class="small">@string.Join(", ", a.Models)</td></tr>
+                    <tr><td>SDK</td><td>@a.SdkVersion</td></tr>
+                    @if (a.Error is not null) { <tr><td>Error</td><td class="bad small">@a.Error</td></tr> }
+                </tbody></table>
+            }
+            <p class="small muted">Login once: <code>docker compose run --rm auditor login</code> (device code), then set <code>AUDITOR_ENGINE=copilot</code> in .env and <code>docker compose up -d</code>.</p>
+        </section>
+
+        <section class="panel">
+            <header><h2>Configuration</h2><span class="meta">loaded <Ago At="Config.LoadedAt" /> · hash @Config.Hash</span></header>
+            <div class="mono small">@Config.Path</div>
+            <div class="row" style="margin:.5rem 0"><button @onclick="Reload">Reload config</button><button @onclick="Rederive">Re-derive deployments</button><button @onclick="Backup">Back up database now</button></div>
+            @if (_message is not null) { <div class="banner info">@_message</div> }
+            @foreach (var e in Config.LastLoadErrors) { <div class="banner bad">@e</div> }
+            @foreach (var w in Config.LastLoadWarnings) { <div class="banner warn">@w</div> }
+            <h3>Environments</h3>
+            <table class="t"><tbody>@foreach (var e in Config.Current.Environments.OrderBy(e => e.Order)) { <tr><td>@e.Name</td><td><span class="badge @(e.Tier == EnvironmentTier.Production ? "bad" : "")">@e.Tier</span></td><td class="mono small">@string.Join("  ", e.StagePatterns)</td><td class="small">@(e.AdoId is { } id ? $"adoId {id}" : "")</td></tr> }</tbody></table>
+            <h3>Notifications</h3>
+            <button @onclick="EnableNotifications">Enable browser notifications</button> <span class="small muted">@_notif</span>
+        </section>
+    </div>
+</div>
+
+@code {
+    private List<Repo> _repos = [];
+    private string _q = "";
+    private bool _assignedOnly;
+    private IReadOnlyList<Dashboard.Web.Ado.ProbeResult>? _probe;
+    private bool _probing, _checkingAuditor;
+    private Dashboard.Core.Contracts.AuditorStatus? _auditor;
+    private string? _message, _notif;
+    [Inject] IJSRuntime JS { get; set; } = default!;
+
+    protected override async Task LoadAsync() => _repos = await Admin.SearchAsync(null);
+
+    private async Task Assign(Repo r, bool v) { await Admin.SetAssignedAsync(r.Id, v); _repos = await Admin.SearchAsync(null); }
+    private async Task SetType(Repo r, ChangeEventArgs e) { if (Enum.TryParse<RepoType>(e.Value?.ToString(), out var t)) await Admin.SetTypeAsync(r.Id, t); }
+
+    private async Task Probe()
+    {
+        _probing = true;
+        try { _probe = await Ado.ProbeAsync(CancellationToken.None); }
+        catch (Exception ex) { _probe = [new("Connection", "-", false, ex.Message)]; }
+        finally { _probing = false; }
+    }
+
+    private async Task AuditorStatus()
+    {
+        _checkingAuditor = true;
+        try { _auditor = await Auditor.StatusAsync(CancellationToken.None); }
+        finally { _checkingAuditor = false; }
+    }
+
+    private async Task Reload()
+    {
+        var r = Config.Reload();
+        _message = r.IsValid ? $"Reloaded ({r.Hash}). Health metrics will be recomputed." : "Reload rejected — see errors below.";
+        if (r.IsValid) await Admin.EnqueueAsync("snapshot");
+    }
+
+    private async Task Rederive()
+    {
+        foreach (var r in _repos.Where(r => r.Assigned)) await Admin.EnqueueAsync("rederive", r.Id);
+        _message = "Queued re-derivation of deployments for all assigned repos.";
+    }
+
+    private async Task Backup()
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        _message = "Backed up to " + await DatabaseInitializer.BackupNowAsync(db, DatabaseInitializer.DataDirectory(Env, Host), CancellationToken.None);
+    }
+
+    private async Task EnableNotifications()
+    {
+        try { _notif = await JS.InvokeAsync<string>("dash.requestNotifications"); } catch (JSException ex) { _notif = ex.Message; }
+    }
+}

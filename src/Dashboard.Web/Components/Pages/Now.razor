@@ -1,0 +1,167 @@
+@page "/"
+@inherits LivePage
+@inject NowService NowSvc
+@inject UserStateService UserState
+
+<PageTitle>Now · DevOps Dashboard</PageTitle>
+
+<div class="row" style="margin-bottom:.5rem">
+    <h1 style="margin:0">What's happening now</h1>
+    <span class="muted small">as of <Ago At="_model?.GeneratedAt" /></span>
+</div>
+
+@if (LoadError is not null) { <div class="banner bad">@LoadError</div> }
+@if (Loading && _model is null) { <div class="empty">Loading…</div> }
+else if (_model is { } m)
+{
+    <div class="stack">
+    @foreach (var panel in Config.Current.NowView.Panels)
+    {
+        switch (panel)
+        {
+            case "sinceLastLooked":
+                <section class="panel">
+                    <header><h2>Since you last looked</h2><span class="meta">@(m.SinceLastLooked.Since is { } s ? "since " + Config.WorkingHours.ToLocal(s).ToString("ddd HH:mm") : "last 24h")</span></header>
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">Main/CI failures</div><div class="value @(m.SinceLastLooked.Failures > 0 ? "bad" : "")">@m.SinceLastLooked.Failures</div></div>
+                        <div class="kpi"><div class="label">PRs merged</div><div class="value">@m.SinceLastLooked.Merged</div></div>
+                        <div class="kpi"><div class="label">Production deploys</div><div class="value good">@m.SinceLastLooked.ProdDeploys</div><div class="sub">sim + prod</div></div>
+                        <div class="kpi"><div class="label">New approvals for you</div><div class="value @(m.SinceLastLooked.NewApprovals > 0 ? "warnc" : "")">@m.SinceLastLooked.NewApprovals</div></div>
+                    </div>
+                </section>
+                break;
+            case "attention":
+                <section class="panel">
+                    <header><h2>Needs attention</h2><span class="badge @(m.Attention.Count > 0 ? "bad" : "ok")">@m.Attention.Count</span>
+                        <span class="meta">ranked: your approvals → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
+                    @if (m.Attention.Count == 0) { <div class="empty">Nothing needs you right now. 🎉</div> }
+                    <div class="queue">
+                        @foreach (var a in m.Attention.Take(_showAll ? 500 : 25))
+                        {
+                            <div class="qitem k@((int)a.Kind)">
+                                <div class="icon">@Icon(a.Kind)</div>
+                                <div>
+                                    <div class="title">@if (a.Badge is not null) { <span class="badge bad">@a.Badge</span> } <a href="repo/@Uri.EscapeDataString(a.RepoName)">@a.Title</a></div>
+                                    <div class="detail person-aware">@a.Detail</div>
+                                </div>
+                                <div class="when"><Ago At="a.Since" /><br /><AdoLink Href="@a.Link">open in ADO ↗</AdoLink></div>
+                            </div>
+                        }
+                    </div>
+                    @if (m.Attention.Count > 25 && !_showAll) { <button style="margin-top:.5rem" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
+                </section>
+                break;
+            case "matrix":
+                <section class="panel">
+                    <header><h2>Components × environments</h2><Info Text="Latest successful deployment per component and environment (derived from pipeline stages). ⚠ = sim and prod on different versions. +N = commits merged since the deployed build was queued." />
+                        <span class="meta"><label><input type="checkbox" @bind="_matrixProdOnly" /> only components with Production deploys</label></span></header>
+                    @if (m.Matrix.Count == 0) { <div class="empty">No deployments synced yet.</div> }
+                    else
+                    {
+                        <div class="table-wrap">
+                        <table class="t matrix">
+                            <thead><tr><th>Repo / component</th>@foreach (var e in m.Environments) { <th>@e</th> }</tr></thead>
+                            <tbody>
+                            @foreach (var row in m.Matrix.Where(r => !_matrixProdOnly || r.Cells.Values.Any(c => c.Latest?.Tier == EnvironmentTier.Production)))
+                            {
+                                <tr>
+                                    <td><a href="repo/@Uri.EscapeDataString(row.RepoName)">@row.RepoName</a>
+                                        @if (row.Component is { } c) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")">@c.Name</span> }</td>
+                                    @foreach (var e in m.Environments)
+                                    {
+                                        var cell = row.Cells.GetValueOrDefault(e);
+                                        <td class="cell">
+                                            @if (cell is null || (cell.Latest is null && cell.InProgress is null)) { <span class="muted">—</span> }
+                                            else
+                                            {
+                                                <div class="cellv @(cell.Drift ? "drift" : "")">
+                                                    @if (cell.Latest is { } d) { <span class="ver" title="@d.SourceVersion">@d.Version @(cell.Drift ? "⚠" : "")</span><span class="age"><Ago At="d.FinishTime" />@if (cell.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</span> }
+                                                    @if (cell.InProgress is { } ip) { <span class="badge info"><span class="dot info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying") @ip.Version</span> }
+                                                </div>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                        </div>
+                    }
+                </section>
+                break;
+            case "running":
+                <section class="panel">
+                    <header><h2>Running &amp; queued</h2><span class="badge info">@m.Running.Count</span></header>
+                    @if (m.Running.Count == 0) { <div class="empty">Nothing running.</div> }
+                    else
+                    {
+                        <table class="t">
+                            <thead><tr><th>Repo</th><th>Pipeline</th><th>Build</th><th>Stage</th><th>Reason</th><th class="person">By</th><th>Queued</th></tr></thead>
+                            <tbody>
+                            @foreach (var r in m.Running)
+                            {
+                                <tr>
+                                    <td><a href="repo/@Uri.EscapeDataString(r.RepoName)">@r.RepoName</a></td>
+                                    <td>@r.PipelineName</td>
+                                    <td><AdoLink Href="@r.Run.WebUrl">@r.Run.BuildNumber</AdoLink></td>
+                                    <td>@if (r.WaitingApproval) { <span class="badge warn">⏸ approval</span> } @(r.CurrentStage ?? (r.Run.Status == "notStarted" ? "queued" : "—")) @if (r.Environment is not null) { <span class="muted small">→ @r.Environment</span> }</td>
+                                    <td class="muted">@r.Run.Reason</td>
+                                    <td class="person muted">@r.Run.RequestedFor</td>
+                                    <td><Ago At="r.Run.QueueTime" /></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+                break;
+            case "shipped":
+                <section class="panel">
+                    <header><h2>Shipped in the last @Config.Current.NowView.ShippedHours h</h2><span class="badge ok">@m.Shipped.Count</span></header>
+                    @if (m.Shipped.Count == 0) { <div class="empty">Nothing shipped.</div> }
+                    else
+                    {
+                        <table class="t">
+                            <tbody>
+                            @foreach (var sh in m.Shipped)
+                            {
+                                <tr><td class="nowrap"><Ago At="sh.At" /></td><td>@(sh.Kind == "deploy" ? "🚀" : "🔀")</td><td><a href="repo/@Uri.EscapeDataString(sh.RepoName)">@sh.RepoName</a></td><td><AdoLink Href="@sh.Link">@sh.What</AdoLink></td></tr>
+                            }
+                            </tbody>
+                        </table>
+                    }
+                </section>
+                break;
+        }
+    }
+    </div>
+}
+
+@code {
+    private NowModel? _model;
+    private bool _showAll;
+    private bool _matrixProdOnly;
+    private DateTimeOffset? _lastLooked;
+    private bool _markedSeen;
+
+    protected override async Task LoadAsync()
+    {
+        if (!_markedSeen) _lastLooked = await UserState.GetDateAsync("lastLooked");
+        _model = await NowSvc.BuildAsync(_lastLooked);
+        if (!_markedSeen)
+        {
+            _markedSeen = true;
+            await UserState.SetDateAsync("lastLooked", Clock.UtcNow);
+        }
+    }
+
+    private static string Icon(AttentionKind k) => k switch
+    {
+        AttentionKind.ApprovalForMe => "✋",
+        AttentionKind.MainRed => "🔴",
+        AttentionKind.ProductionDeployFailed => "💥",
+        AttentionKind.StuckRelease => "🐢",
+        AttentionKind.StuckPr => "⏳",
+        _ => "❌",
+    };
+}

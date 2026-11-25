@@ -6,8 +6,8 @@ secrets/
 *.pat
 
 # Local data / volumes
-data/
-clones/
+/data/
+/clones/
 *.db
 *.db-shm
 *.db-wal
