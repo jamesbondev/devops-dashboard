@@ -1,0 +1,120 @@
+# DevOps Dashboard configuration. Reloaded from the Settings page ("Reload config").
+# Validation errors are shown on the Settings/Setup page; the app keeps the last valid config.
+
+azureDevOps:
+  # "mock" = synthetic data, no network. Switch to "live" once ADO_PAT is set in .env.
+  mode: mock
+  organization: contoso          # https://dev.azure.com/<organization>
+  project: Platform              # the ADO project that holds your team's repos
+  apiVersion: "7.1"
+
+time:
+  timeZone: Europe/London        # IANA id; used for working hours and the daily job
+  workdayStart: "09:00"
+  workdayEnd: "17:30"
+  workDays: [Monday, Tuesday, Wednesday, Thursday, Friday]
+
+# Environments are matched against timeline STAGE names/identifiers (regex, case-insensitive).
+# sim and prod are both Production tier. Adjust stagePatterns to match your templates' stage names.
+environments:
+  - name: team
+    tier: Team
+    order: 0
+    stagePatterns: ["^deploy[_-]?team", "team[_-]?env", "^dev($|[_-])", "^deploy[_-]?dev"]
+  - name: staging
+    tier: Staging
+    order: 1
+    stagePatterns: ["staging", "^stg"]
+  - name: sim
+    tier: Production
+    order: 2
+    stagePatterns: ["(^|[_-])sim($|[_-])", "^deploy[_-]?sim"]
+  - name: prod
+    tier: Production
+    order: 3
+    stagePatterns: ["(^|[_-])prod($|[_-]|uction)", "^deploy[_-]?prod"]
+    # adoId: 42                  # optional: ADO environment id, enables reading its check configurations
+defaultEnvironmentTier: Team
+
+templates:
+  project: Platform
+  repository: pipeline-templates
+  aliasPatterns: ["^templates?$", "pipeline-templates"]
+  compliantBranches: [main]
+  experimentalBranches: [next]
+  staleInfoDays: 14
+
+# Identities excluded from PR metrics (substring match on display name, or exact id).
+botIdentities: ["Project Collection Build Service", "dependabot", "renovate", "Azure Pipelines"]
+
+sync:
+  hotSeconds: 60                 # active PRs, running builds, pending approvals
+  warmMinutes: 15                # history
+  dailyHour: 2                   # local hour; runs on startup if overdue
+  backfillPrDays: 180
+  backfillBuildDays: 365
+  overlapMinutes: 60
+
+results:
+  succeededWithIssuesIsFailure: true   # "if a step failed, the pipeline failed"
+
+metrics:
+  windowDays: 30
+  minRuns: 10
+  minPrs: 5
+  percentileMinSample: 20        # median below this sample size, p85 at or above
+  stuckPrIdleWorkingHours: 8
+  stalePrWorkingDays: 3
+  dormantDays: 30
+
+# Tier rules. Tiers are cumulative gates; Insufficient data never passes.
+# Calibrate thresholds after the first full sync (Health page shows the distribution).
+rules:
+  - { id: PIPE-001, tier: Bronze }
+  - { id: POL-001,  tier: Bronze }
+  - { id: POL-002,  tier: Bronze }
+  - { id: TPL-001,  tier: Bronze }
+  - { id: DOC-001,  tier: Bronze }
+  - { id: NET-001,  tier: Bronze }
+  - { id: BLD-001,  tier: Silver, threshold: 0.90 }   # main success rate
+  - { id: BLD-002,  tier: Silver, threshold: 8 }      # longest red interval, working hours
+  - { id: FLK-001,  tier: Silver, threshold: 0.05 }   # flaky run rate
+  - { id: PR-001,   tier: Silver, threshold: 16 }     # time to first review, working hours
+  - { id: TPL-002,  tier: Silver }
+  - { id: BLD-003,  tier: Gold,   threshold: 0.95 }
+  - { id: PR-002,   tier: Gold,   threshold: 5 }      # oldest active PR, working days
+  - { id: DEP-001,  tier: Gold,   threshold: 30, repoTypes: [Service] }
+  - { id: TST-001,  tier: Gold }
+  - { id: AUD-001,  tier: Gold }
+
+components:
+  # Hide or add components the scanners get wrong.
+  overrides: []
+  #  - { repo: orders, name: orders-api, kind: AksService }
+  #  - { repo: orders, name: legacy-thing, hidden: true }
+  # Map deployment stages/jobs to components when job names are generic.
+  deployRules: []
+  #  - { repo: "^orders$", stagePattern: "prod", jobPattern: "dacpac", component: Orders.Database }
+
+audit:
+  enabled: true
+  auditorUrl: http://auditor:8081
+  model: claude-opus-5.5         # preferred; falls back to the strongest available model
+  reasoningEffort: high
+  timeoutMinutes: 20
+  votes: 1                       # 3 = majority vote over judgement checks
+  minHoursBetweenAudits: 24
+  rubricPath: audit/rubric
+  clonesPath: /clones
+  goldenRepos: []                # hand-labelled calibration repos
+
+nowView:
+  panels: [attention, matrix, running, shipped, sinceLastLooked]
+  shippedHours: 24
+  recentFailureHours: 24
+
+notifications:
+  enabled: true
+  approvalWaitingForMe: true
+  productionDeployFailed: true
+  mainRedHours: 1
