@@ -165,3 +165,9 @@ table.findings td.finding .do { margin-top: .35rem; }
 table.findings td.ev div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 table.findings .factions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
 table.findings .factions select { max-width: 100%; }
+
+table.jobs { width: 100%; }
+table.jobs td.jobmsg { width: 50%; max-width: 0; }
+table.jobs td.jobmsg div { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+table.jobs td.jobmsg div:hover { -webkit-line-clamp: unset; }
+table.jobs td.jobmsg.err { color: var(--bad); }

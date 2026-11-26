@@ -34,13 +34,13 @@
 </section>
 <section class="panel">
     <header><h2>Job history (14 days)</h2></header>
-    <table class="t"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
+    <table class="t jobs"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
     @foreach (var j in _jobs)
     {
         <tr><td>@j.Type <span class="muted small">@RepoName(j.Payload)</span></td>
             <td><span class="badge @(j.Status == JobStatus.Succeeded ? "ok" : j.Status == JobStatus.Failed ? "bad" : "info")">@j.Status</span></td>
             <td><Ago At="j.StartedAt ?? j.CreatedAt" /></td><td class="num">@(j.DurationMs is { } d ? $"{d / 1000.0:0.#}s" : "—")</td>
-            <td class="num">@j.ApiCalls</td><td class="num">@j.TstuUsed.ToString("0.#")</td><td class="small">@(j.Error ?? j.Summary)</td></tr>
+            <td class="num">@j.ApiCalls</td><td class="num">@j.TstuUsed.ToString("0.#")</td><td class="small jobmsg @(j.Error is null ? "" : "err")"><div title="@(j.Error ?? j.Summary)">@(j.Error ?? j.Summary)</div></td></tr>
     }
     </tbody></table>
 </section>
