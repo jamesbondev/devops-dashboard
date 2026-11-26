@@ -1,1 +1,36 @@
-<section class="panel"><header class="panel__head"><h2>Glossary</h2></header><div class="empty">Coming up.</div></section>
+@* Definitions for the terms used across the dashboard. Info tooltips link here via glossary#g-<term>. *@
+@inject ConfigService Config
+@{ var c = Config.Current; }
+<section class="panel">
+    <header class="panel__head"><h2>Glossary</h2><span class="panel__meta">metric window: @c.Metrics.WindowDays d unless a label says otherwise</span></header>
+    <dl class="glossary">
+        <dt id="g-tier">Tier (Gold · Silver · Bronze · None)</dt>
+        <dd>Maturity rating. Tiers are cumulative gates: a repo is Silver only if every Bronze and Silver rule passes. "Next gap" lists the rules blocking the next tier.</dd>
+        <dt id="g-provisional">Provisional (*)</dt>
+        <dd>The next tier is blocked only by rules with insufficient data (e.g. too few runs or PRs), not by failing ones. The tier may rise once enough data exists.</dd>
+        <dt id="g-n">n=</dt>
+        <dd>Sample size behind a metric in its window: completed main runs for Main %, reviewed PRs for 1st review. Small n means the number is noisy; repos with n=0 or dormant repos are grouped under "No data".</dd>
+        <dt id="g-p85">Median / p85</dt>
+        <dd>Time to first review and time to merge use the median when n&lt;20 and the 85th percentile (p85: 85 % of PRs were faster) when n≥20. Measured in working hours.</dd>
+        <dt id="g-main-red">Main red</dt>
+        <dd>The latest CI run on the default branch failed its build stages. Deploy-stage failures don't count.</dd>
+        <dt id="g-flaky">Flaky % / wasted minutes</dt>
+        <dd>Flaky = a run where a job failed and then passed on retry. Wasted minutes = duration of failed attempts that later went green without a code change.</dd>
+        <dt id="g-same">"= same", —, ⚠, +N</dt>
+        <dd>In the components × environments grid: "= same" means the same version as the environment to its left (promotion path); "—" means never deployed; ⚠ means sim and prod run different versions (drift); +N is commits merged since the deployed build was queued. A coloured branch pill means the build came from a non-default branch. "Changes only" hides rows on the same version everywhere.</dd>
+        <dt id="g-attention">Needs attention ranking</dt>
+        <dd>Your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation, then by age.</dd>
+        <dt id="g-lead-time">Lead time · deploys/week · change failure</dt>
+        <dd>Lead time = PR publish → first Production deploy (median). Deploys/week counts distinct component+version reaching sim or prod. Change failure (proxy) = failed Production deploy stages ÷ all. Health metrics use @c.Metrics.WindowDays d; the repo Deployments tab lists the last 60 d.</dd>
+        <dt id="g-fact">Fact vs judgement</dt>
+        <dd>Audit checks are either facts (evaluated in code by the static scanner — deterministic) or judgements (assessed by Copilot with read-only access to the repo, optionally by majority vote). Treat judgements as a reviewer's opinion; "uncertain" marks disagreeing votes or unverifiable evidence.</dd>
+        <dt id="g-finding-status">Finding statuses</dt>
+        <dd>New = first seen, not triaged · Accepted = agreed, to do · Dismissed = won't fix / false positive / not applicable (with reason) · Done = set automatically when a later audit no longer reports it. Findings are tracked across audits by fingerprint (check + component + path).</dd>
+        <dt id="g-jobs">Hot / warm / daily jobs</dt>
+        <dd>Hot (every @c.Sync.HotSeconds s): active PRs, running builds, pending approvals. Warm (every @c.Sync.WarmMinutes min): run, PR and deployment history. Daily (around @c.Sync.DailyHour:00 local, or on startup if overdue): repository list, environment check configurations and other slow-changing data.</dd>
+        <dt id="g-tstu">TSTU</dt>
+        <dd>Azure DevOps "throughput units" — its rate-limit currency (about 200 per 5 minutes per user). ADO only reports usage via X-RateLimit headers near the limit; when throttled, sync backs off.</dd>
+        <dt id="g-gate">Gate</dt>
+        <dd>An approval or check blocking a pipeline stage. "Can require you" = an approval check names you or one of your groups.</dd>
+    </dl>
+</section>

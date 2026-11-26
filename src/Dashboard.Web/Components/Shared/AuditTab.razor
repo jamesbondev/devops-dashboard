@@ -22,7 +22,7 @@ else
         <div class="table-wrap">
         <table class="t findings">
             <colgroup><col style="width:15%" /><col style="width:8%" /><col style="width:42%" /><col style="width:20%" /><col style="width:15%" /></colgroup>
-            <thead><tr><th>Check</th><th>Result</th><th>Finding</th><th>Evidence</th><th>Status</th></tr></thead>
+            <thead><tr><th>Check</th><th>Result <Info Text="Kind under the result: fact = computed by the static scanner; judgement = assessed by Copilot." Term="fact" /></th><th>Finding</th><th>Evidence</th><th>Status <Info Text="New → Accepted / Dismissed; Done when a later audit no longer reports it." Term="finding-status" /></th></tr></thead>
             <tbody>
             @foreach (var row in Detail.Findings.Where(x => !_hidePass || x.Finding.Result is not (CheckResult.Pass or CheckResult.NotApplicable)))
             {

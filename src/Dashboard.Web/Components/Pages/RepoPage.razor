@@ -36,7 +36,7 @@ else
     <div class="panel mb-4">
         @if (h.Tier.NextTier is { } nt)
         {
-            <div><b>Why @h.Tier.Tier@(h.Tier.Provisional ? " (provisional)" : "")</b> — @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") from <b>@nt</b>:</div>
+            <div><b>Why @h.Tier.Tier@(h.Tier.Provisional ? " (provisional)" : "")</b> <Info Text="Tiers are cumulative gates; provisional = blocked only by rules with insufficient data." Term="provisional" /> — @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") from <b>@nt</b>:</div>
             <ul>
                 @foreach (var g in h.Tier.NextTierGaps)
                 {
@@ -60,7 +60,7 @@ else
         case "pipelines":
             <div class="grid-2">
                 <section class="panel">
-                    <header class="panel__head"><h2>Flaky jobs (@Config.Current.Metrics.WindowDays d)</h2><span class="panel__meta">@h.WastedMinutes.ToString("0") wasted minutes</span></header>
+                    <header class="panel__head"><h2>Flaky jobs <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></h2><span class="panel__meta">@h.WastedMinutes.ToString("0") wasted minutes</span></header>
                     @if (h.FlakyJobs.Count == 0) { <div class="empty">No flaky jobs.</div> }
                     else
                     {
@@ -76,7 +76,7 @@ else
                     }
                 </section>
                 <section class="panel">
-                    <header class="panel__head"><h2>Top failure causes</h2><Info Text="First error per failed task, normalised (ids/paths/numbers removed) and hashed. Same fingerprint across repos usually means a platform/template issue — see Insights." /></header>
+                    <header class="panel__head"><h2>Top failure causes <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></h2><Info Text="First error per failed task, normalised (ids/paths/numbers removed) and hashed. Same fingerprint across repos usually means a platform/template issue — see Insights." /></header>
                     @if (_d.TopFailures.Count == 0) { <div class="empty">No failures recorded.</div> }
                     <table class="t"><tbody>
                     @foreach (var tf in _d.TopFailures) { <tr><td class="mono text-sm">@Trunc(Fmt.Msg(tf.Message), 180)</td><td class="num nowrap">@tf.Count runs</td><td><Ago At="tf.Last" /></td></tr> }
@@ -84,7 +84,7 @@ else
                 </section>
             </div>
             <section class="panel mt-4">
-                <header class="panel__head"><h2>Runs (last @Config.Current.Metrics.WindowDays days)</h2>
+                <header class="panel__head"><h2>Runs <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></h2>
                     <span class="panel__meta"><label><input type="checkbox" @bind="_hidePr" /> hide PR builds</label></span></header>
                 <div class="table-wrap">
                 <table class="t">
@@ -112,10 +112,10 @@ else
 
         case "prs":
             <div class="kpi-row mb-4">
-                <div class="kpi"><div class="kpi__label">Time to first review (@h.Prs.FirstReviewLabel)</div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="kpi__sub">working hours, n=@h.Prs.ReviewedInWindow</div></div>
-                <div class="kpi"><div class="kpi__label">Time to merge (@h.Prs.MergeLabel)</div><div class="kpi__value">@Fmt.Num(h.Prs.MergeHours)h</div><div class="kpi__sub">n=@h.Prs.CompletedInWindow</div></div>
-                <div class="kpi"><div class="kpi__label">Active PRs</div><div class="kpi__value">@h.Prs.ActiveCount</div><div class="kpi__sub">@h.Prs.StuckCount stuck</div></div>
-                <div class="kpi"><div class="kpi__label">Oldest active</div><div class="kpi__value">@Fmt.Num(h.Prs.OldestActiveWorkingDays)d</div><div class="kpi__sub">working days</div></div>
+                <div class="kpi"><div class="kpi__label">Time to first review, @h.Prs.FirstReviewLabel <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span> <Info Text="Median when n<20, p85 when n≥20; working hours." Term="p85" /></div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours) <small>wh</small></div><div class="kpi__sub">working hours, n=@h.Prs.ReviewedInWindow</div></div>
+                <div class="kpi"><div class="kpi__label">Time to merge, @h.Prs.MergeLabel <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@Fmt.Num(h.Prs.MergeHours) <small>wh</small></div><div class="kpi__sub">n=@h.Prs.CompletedInWindow</div></div>
+                <div class="kpi"><div class="kpi__label">Active PRs <span class="kpi__window">now</span></div><div class="kpi__value">@h.Prs.ActiveCount</div><div class="kpi__sub">@h.Prs.StuckCount stuck</div></div>
+                <div class="kpi"><div class="kpi__label">Oldest active PR <span class="kpi__window">now</span></div><div class="kpi__value">@Fmt.Num(h.Prs.OldestActiveWorkingDays) <small>working d</small></div><div class="kpi__sub">working days</div></div>
             </div>
             <section class="panel">
                 <header class="panel__head"><h2>Pull requests</h2><span class="panel__meta">drafts and bots excluded from metrics</span></header>
@@ -152,7 +152,7 @@ else
                 <DeployMatrix Rows="RepoMatrix()" Environments="RepoEnvironments()" ByRepo="false" />
             </section>
             <section class="panel">
-                <header class="panel__head"><h2>Releases by version <span class="kpi__window">60 d</span></h2><Info Text="One row per build version: the environments it reached (✕ = a failed attempt there), overall result and the longest approval wait. Derived from pipeline stages matching an environment's stagePatterns." /></header>
+                <header class="panel__head"><h2>Releases by version <span class="kpi__window">60 d</span></h2><Info Term="lead-time" Text="One row per build version: the environments it reached (✕ = a failed attempt there), overall result and the longest approval wait. Derived from pipeline stages matching an environment's stagePatterns." /></header>
                 @{ var releases = Releases().ToList(); }
                 @if (releases.Count == 0) { <div class="empty">No deployments in 60 d.</div> }
                 else
@@ -216,16 +216,16 @@ else
 
         default:
             <div class="kpi-row mb-4">
-                <div class="kpi"><div class="kpi__label">Main success (@Config.Current.Metrics.WindowDays d)</div><div class="kpi__value @(h.MainSuccessRate < 0.9 ? "bad" : "")">@Fmt.Pct(h.MainSuccessRate)</div><div class="kpi__sub">n=@h.CompletedBuildRuns @Trend(h.SuccessRateTrend)</div></div>
-                <div class="kpi"><div class="kpi__label">Main red now</div><div class="kpi__value @(h.OpenRed is null ? "good" : "bad")">@(h.OpenRed is { } red ? Fmt.Hours((Now - red.Start).TotalHours) : "no")</div><div class="kpi__sub">longest @Fmt.Num(h.LongestRedWorkingHours)wh in window</div></div>
-                <div class="kpi"><div class="kpi__label">Flaky run rate</div><div class="kpi__value">@Fmt.Pct1(h.FlakyRunRate)</div><div class="kpi__sub">@h.WastedMinutes.ToString("0") wasted min</div></div>
-                <div class="kpi"><div class="kpi__label">Build duration (median)</div><div class="kpi__value">@Fmt.Num(h.MedianBuildMinutes, "0")m</div><div class="kpi__sub">build stages</div></div>
-                <div class="kpi"><div class="kpi__label">Time to first review</div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="kpi__sub">@h.Prs.FirstReviewLabel, working hours</div></div>
+                <div class="kpi"><div class="kpi__label">Main success <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span> <Info Text="n = completed main runs in the window." Term="n" /></div><div class="kpi__value @(h.MainSuccessRate < 0.9 ? "bad" : "")">@Fmt.Pct(h.MainSuccessRate)</div><div class="kpi__sub">n=@h.CompletedBuildRuns @Trend(h.SuccessRateTrend)</div></div>
+                <div class="kpi"><div class="kpi__label">Main red <span class="kpi__window">now</span> <Info Text="Latest default-branch CI run failed its build stages." Term="main-red" /></div><div class="kpi__value @(h.OpenRed is null ? "good" : "bad")">@(h.OpenRed is { } red ? Fmt.Hours((Now - red.Start).TotalHours) : "no")</div><div class="kpi__sub">longest @Fmt.Num(h.LongestRedWorkingHours)wh in window</div></div>
+                <div class="kpi"><div class="kpi__label">Flaky run rate <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span> <Info Text="Runs where a job failed then passed on retry ÷ completed runs." Term="flaky" /></div><div class="kpi__value">@Fmt.Pct1(h.FlakyRunRate)</div><div class="kpi__sub">@h.WastedMinutes.ToString("0") wasted min</div></div>
+                <div class="kpi"><div class="kpi__label">Build duration, median <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@Fmt.Num(h.MedianBuildMinutes, "0") <small>min</small></div><div class="kpi__sub">build stages</div></div>
+                <div class="kpi"><div class="kpi__label">Time to first review <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours) <small>wh</small></div><div class="kpi__sub">@h.Prs.FirstReviewLabel, working hours</div></div>
                 <div class="kpi"><div class="kpi__label">Last Production deploy</div><div class="kpi__value text-sm"><Ago At="h.LastProductionDeploy?.FinishTime" /></div><div class="kpi__sub">@h.LastProductionDeploy?.EnvironmentName @h.LastProductionDeploy?.Version</div></div>
             </div>
             <div class="grid-2">
                 <section class="panel">
-                    <header class="panel__head"><h2>12-week trends</h2><span class="panel__meta">dashed = template release on main</span></header>
+                    <header class="panel__head"><h2>Trends <span class="kpi__window">12 wk</span></h2><span class="panel__meta">dashed = template release on main</span></header>
                     <table class="t"><tbody>
                         <tr><td>Main success rate</td><td><Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Width="260" Height="36" Markers="TemplateMarkers()" /></td></tr>
                         <tr><td>Flaky run rate</td><td><Spark Points="h.Weekly.Select(w => (double?)w.FlakyRate).ToList()" Min="0" Width="260" Height="36" Color="var(--warn)" Markers="TemplateMarkers()" /></td></tr>

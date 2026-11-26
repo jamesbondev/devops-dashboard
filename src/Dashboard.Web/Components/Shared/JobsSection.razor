@@ -13,10 +13,10 @@
 </div>
 
 <div class="kpi-row mb-4">
-    <div class="kpi"><div class="kpi__label">API calls (process)</div><div class="kpi__value">@Stats.Calls</div></div>
-    <div class="kpi"><div class="kpi__label">TSTU used (process)</div><div class="kpi__value">@(Stats.Tstu > 0 ? Stats.Tstu.ToString("0.#") : "n/a")</div><div class="kpi__sub">ADO reports usage only via X-RateLimit headers near the limit (200 / 5 min)</div></div>
+    <div class="kpi"><div class="kpi__label">API calls <span class="kpi__window">since app start</span></div><div class="kpi__value">@Stats.Calls</div></div>
+    <div class="kpi"><div class="kpi__label">TSTU used <span class="kpi__window">since app start</span> <Info Text="Azure DevOps rate-limit units (≈200 per 5 min)." Term="tstu" /></div><div class="kpi__value">@(Stats.Tstu > 0 ? Stats.Tstu.ToString("0.#") : "n/a")</div><div class="kpi__sub">ADO reports usage only via X-RateLimit headers near the limit (200 / 5 min)</div></div>
     <div class="kpi"><div class="kpi__label">Rate-limit remaining</div><div class="kpi__value">@(Stats.LastRemaining?.ToString("0") ?? "—")</div><div class="kpi__sub">limit @(Stats.LastLimit?.ToString("0") ?? "—")</div></div>
-    <div class="kpi"><div class="kpi__label">Throttle events</div><div class="kpi__value @(Stats.Throttled > 0 ? "warnc" : "")">@Stats.Throttled</div></div>
+    <div class="kpi"><div class="kpi__label">Throttle events <span class="kpi__window">since app start</span></div><div class="kpi__value @(Stats.Throttled > 0 ? "warnc" : "")">@Stats.Throttled</div></div>
     <div class="kpi"><div class="kpi__label">Running now</div><div class="kpi__value text-sm">@(Signals.Running ?? "idle")</div></div>
 </div>
 @if (Stats.LastError is not null) { <div class="banner banner--warn">Last API error <Ago At="Stats.LastErrorAt" />: @Stats.LastError</div> }
@@ -45,7 +45,7 @@
     </div>
 </section>
 <section class="panel">
-    <header class="panel__head"><h2>Job history <span class="kpi__window">14 d</span></h2><span class="panel__meta">consecutive successful runs of the same type are folded</span></header>
+    <header class="panel__head"><h2>Job history <span class="kpi__window">14 d</span></h2><Info Text="Hot = active PRs/builds/approvals; warm = history; daily = repo list and slow-changing data." Term="jobs" /><span class="panel__meta">consecutive successful runs of the same type are folded</span></header>
     <div class="table-wrap">
     <table class="t compact jobs"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
     @foreach (var (j, n) in Folded())

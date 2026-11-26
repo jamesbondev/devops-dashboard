@@ -6,7 +6,7 @@
 
 <div class="grid-2">
     <section class="panel">
-        <header class="panel__head"><h2>Gates that can escalate to you</h2><Info Text="Environment check configurations (read daily). An approval check naming you or one of your groups means that environment can need your approval. Environments need adoId in config for live mode." /></header>
+        <header class="panel__head"><h2>Gates that can escalate to you</h2><Info Text="Environment check configurations (read daily). An approval check naming you or one of your groups means that environment can need your approval. Environments need adoId in config for live mode." Term="gate" /></header>
         @if (_checks.Count == 0) { <div class="empty">No check configurations read. Set <code>adoId</code> on environments in config/dashboard.yaml.</div> }
         @foreach (var g in _checks.GroupBy(c => c.EnvironmentName))
         {

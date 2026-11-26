@@ -7,7 +7,7 @@
 {
 <div class="grid-2">
     <section class="panel">
-        <header class="panel__head"><h2>Same failure across repos</h2><Info Text="First error of failed tasks, normalised and hashed. When the same fingerprint appears in several repos, it's usually a template, agent pool or feed problem — not your code." /></header>
+        <header class="panel__head"><h2>Same failure across repos <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></h2><Info Text="First error of failed tasks, normalised and hashed. When the same fingerprint appears in several repos, it's usually a template, agent pool or feed problem — not your code." /></header>
         @if (m.CrossRepoFailures.Count == 0) { <div class="empty">No shared failure fingerprints in the window.</div> }
         <div class="list-divided">
         @foreach (var c in m.CrossRepoFailures.Take(10))
@@ -23,7 +23,7 @@
     </section>
 
     <section class="panel">
-        <header class="panel__head"><h2>Flakiness cost</h2><Info Text="Wasted minutes = duration of failed attempts/runs that later went green without a code change." /></header>
+        <header class="panel__head"><h2>Flakiness cost <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></h2><Info Text="Wasted minutes = duration of failed attempts/runs that later went green without a code change." Term="flaky" /></header>
         <table class="t"><thead><tr><th>Repo</th><th class="num">Wasted min</th><th></th></tr></thead><tbody>
         @{ var max = m.WastedByRepo.Select(w => w.WastedMinutes).DefaultIfEmpty(1).Max(); }
         @foreach (var w in m.WastedByRepo.Take(12)) { <tr><td><a href="repo/@Uri.EscapeDataString(w.Repo)?tab=pipelines">@w.Repo</a></td><td class="num">@w.WastedMinutes.ToString("0")</td><td class="bar-cell"><div class="bar"><span style="width:@((w.WastedMinutes / max * 100).ToString("0"))%"></span></div></td></tr> }
@@ -44,7 +44,7 @@
     </section>
 
     <section class="panel">
-        <header class="panel__head"><h2>Template releases vs. failure rate</h2><Info Text="Fleet-wide CI failure rate in the 3 days before vs after each template commit. A jump after a release is worth raising with the template team." /></header>
+        <header class="panel__head"><h2>Template releases vs. failure rate <span class="kpi__window">±3 d per release</span></h2><Info Text="Fleet-wide CI failure rate in the 3 days before vs after each template commit. A jump after a release is worth raising with the template team." /></header>
         <table class="t"><thead><tr><th>When</th><th>Branch</th><th>Change</th><th class="num">Fail before</th><th class="num">Fail after</th></tr></thead><tbody>
         @foreach (var r in m.TemplateReleases.Take(15))
         {
