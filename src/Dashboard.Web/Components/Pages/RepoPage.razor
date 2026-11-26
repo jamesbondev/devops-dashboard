@@ -7,7 +7,7 @@
 
 <PageTitle>@Name · DevOps Dashboard</PageTitle>
 
-@if (LoadError is not null) { <div class="banner bad">@LoadError</div> }
+@if (LoadError is not null) { <div class="banner banner--bad">@LoadError</div> }
 @if (_d is null)
 {
     @if (!Loading) { <div class="empty">Repo <b>@Name</b> is not assigned to the dashboard. <a href="settings">Assign it in Settings</a>.</div> } else { <div class="empty">Loading…</div> }
@@ -15,41 +15,43 @@
 else
 {
     var h = _d.Health;
-    <div class="row" style="margin-bottom:.25rem">
-        <h1 style="margin:0">@h.Repo.Name</h1>
-        <TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" />
-        <span class="muted" title="@(h.Type != h.Repo.Type ? "from repos config / name pattern" : "")">@RepoTypes.Label(h.Type)</span>
-        @if (h.Dormant) { <span class="badge">dormant</span> }
-        @foreach (var c in h.Components) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")" title="@c.SourcePath (@c.Source)">@c.Name</span> }
-        <span class="grow"></span>
-        <AdoLink Href="@h.Repo.WebUrl">Repo in ADO ↗</AdoLink>
-        <button @onclick="TogglePin">@(h.Repo.Pinned ? "Unpin" : "📌 Pin")</button>
-        <button @onclick="ToggleMute">@(h.Repo.Muted ? "Unmute" : "Mute")</button>
-        <select value="@h.Type" @onchange="ChangeType" title="Repo type selects the rule set (repos.types in config wins; name patterns apply while this is Service)">
-            <option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option>
-        </select>
-        <a class="btn" href="@($"export/repo/{Uri.EscapeDataString(h.Repo.Name)}.md")" target="_blank">Export .md</a>
-    </div>
+    <header class="page-head">
+        <div class="page-head__text">
+            <h1>@h.Repo.Name <TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" />
+                @if (h.Dormant) { <span class="pill">dormant</span> }</h1>
+            <p class="page-head__headline"><span title="@(h.Type != h.Repo.Type ? "from repos config / name pattern" : "")">@RepoTypes.Label(h.Type)</span>
+                @if (h.Components.Count > 0) { <span class="chip-list mt-1">@foreach (var c in h.Components) { <ComponentChip Name="@c.Name" Kind="c.Kind" Title="@($"{c.SourcePath} ({c.Source})")" /> }</span> }</p>
+        </div>
+        <div class="page-head__actions">
+            <AdoLink Href="@h.Repo.WebUrl">Repo in ADO ↗</AdoLink>
+            <button class="btn btn--secondary btn--sm" @onclick="TogglePin">@(h.Repo.Pinned ? "Unpin" : "Pin")</button>
+            <button class="btn btn--secondary btn--sm" @onclick="ToggleMute">@(h.Repo.Muted ? "Unmute" : "Mute")</button>
+            <select class="select select--sm" value="@h.Type" @onchange="ChangeType" title="Repo type selects the rule set (repos.types in config wins; name patterns apply while this is Service)">
+                <option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option>
+            </select>
+            <a class="btn btn--secondary btn--sm" href="@($"export/repo/{Uri.EscapeDataString(h.Repo.Name)}.md")" target="_blank">Export .md</a>
+        </div>
+    </header>
 
-    <div class="panel" style="margin:.5rem 0">
+    <div class="panel mb-4">
         @if (h.Tier.NextTier is { } nt)
         {
             <div><b>Why @h.Tier.Tier@(h.Tier.Provisional ? " (provisional)" : "")</b> — @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") from <b>@nt</b>:</div>
-            <ul style="margin:.3rem 0 0">
+            <ul>
                 @foreach (var g in h.Tier.NextTierGaps)
                 {
-                    <li><code>@g.RuleId</code> @g.Title — <span class="@(g.Status == RuleStatus.Insufficient ? "muted" : "bad")">@g.Display</span> @if (g.Status == RuleStatus.Insufficient) { <span class="badge">insufficient data</span> }
+                    <li><code>@g.RuleId</code> @g.Title — <span class="@(g.Status == RuleStatus.Insufficient ? "muted" : "bad")">@g.Display</span> @if (g.Status == RuleStatus.Insufficient) { <span class="pill">insufficient data</span> }
                         <Info Text="@(RuleCatalog.Known.GetValueOrDefault(g.RuleId)?.Formula ?? "")" /></li>
                 }
             </ul>
         }
-        else { <div><b>Gold</b> — every rule passes. 🏅</div> }
+        else { <div><b>Gold</b> — every rule passes.</div> }
     </div>
 
     <nav class="tabs">
         @foreach (var t in new[] { "overview", "pipelines", "prs", "deployments", "templates", "audit" })
         {
-            <a class="@(Tab == t ? "active" : "")" href="repo/@Uri.EscapeDataString(Name)?tab=@t">@TabTitle(t)</a>
+            <a class="@(Tab == t ? "is-active" : "")" href="repo/@Uri.EscapeDataString(Name)?tab=@t">@TabTitle(t)</a>
         }
     </nav>
 
@@ -58,8 +60,8 @@ else
         case "pipelines":
             <div class="grid-2">
                 <section class="panel">
-                    <header><h2>Flaky jobs (@Config.Current.Metrics.WindowDays d)</h2><span class="meta">@h.WastedMinutes.ToString("0") wasted minutes</span></header>
-                    @if (h.FlakyJobs.Count == 0) { <div class="empty">No flaky jobs. 👍</div> }
+                    <header class="panel__head"><h2>Flaky jobs (@Config.Current.Metrics.WindowDays d)</h2><span class="panel__meta">@h.WastedMinutes.ToString("0") wasted minutes</span></header>
+                    @if (h.FlakyJobs.Count == 0) { <div class="empty">No flaky jobs.</div> }
                     else
                     {
                         <table class="t"><thead><tr><th>Stage / job</th><th class="num">Occurrences</th><th class="num">Wasted min</th></tr></thead><tbody>
@@ -70,20 +72,20 @@ else
                     @if (_d.TestFlakes.Count > 0)
                     {
                         <h3>Flaky tests</h3>
-                        <table class="t"><tbody>@foreach (var g in _d.TestFlakes.GroupBy(t => t.TestName).OrderByDescending(g => g.Count()).Take(10)) { <tr><td class="mono small">@g.Key</td><td class="num">@g.Count()×</td></tr> }</tbody></table>
+                        <table class="t"><tbody>@foreach (var g in _d.TestFlakes.GroupBy(t => t.TestName).OrderByDescending(g => g.Count()).Take(10)) { <tr><td class="mono text-sm">@g.Key</td><td class="num">@g.Count()×</td></tr> }</tbody></table>
                     }
                 </section>
                 <section class="panel">
-                    <header><h2>Top failure causes</h2><Info Text="First error per failed task, normalised (ids/paths/numbers removed) and hashed. Same fingerprint across repos usually means a platform/template issue — see Insights." /></header>
+                    <header class="panel__head"><h2>Top failure causes</h2><Info Text="First error per failed task, normalised (ids/paths/numbers removed) and hashed. Same fingerprint across repos usually means a platform/template issue — see Insights." /></header>
                     @if (_d.TopFailures.Count == 0) { <div class="empty">No failures recorded.</div> }
                     <table class="t"><tbody>
-                    @foreach (var tf in _d.TopFailures) { <tr><td class="mono small">@Trunc(Fmt.Msg(tf.Message), 180)</td><td class="num nowrap">@tf.Count runs</td><td><Ago At="tf.Last" /></td></tr> }
+                    @foreach (var tf in _d.TopFailures) { <tr><td class="mono text-sm">@Trunc(Fmt.Msg(tf.Message), 180)</td><td class="num nowrap">@tf.Count runs</td><td><Ago At="tf.Last" /></td></tr> }
                     </tbody></table>
                 </section>
             </div>
-            <section class="panel" style="margin-top:1rem">
-                <header><h2>Runs (last @Config.Current.Metrics.WindowDays days)</h2>
-                    <span class="meta"><label><input type="checkbox" @bind="_hidePr" /> hide PR builds</label></span></header>
+            <section class="panel mt-4">
+                <header class="panel__head"><h2>Runs (last @Config.Current.Metrics.WindowDays days)</h2>
+                    <span class="panel__meta"><label><input type="checkbox" @bind="_hidePr" /> hide PR builds</label></span></header>
                 <div class="table-wrap">
                 <table class="t">
                     <thead><tr><th>Build</th><th>Pipeline</th><th>Reason</th><th>Build stages</th><th>Stages</th><th class="num">Min</th><th class="person">By</th><th>Queued</th></tr></thead>
@@ -93,12 +95,12 @@ else
                         <tr>
                             <td><AdoLink Href="@r.Run.WebUrl">@r.Run.BuildNumber</AdoLink></td>
                             <td>@r.PipelineName</td>
-                            <td class="muted">@r.Run.Reason</td>
-                            <td>@OutcomeBadge(r.BuildOutcome, r.Run.Status) @if (r.FlakyJobs > 0) { <span class="badge warn" title="a job failed then passed on retry">flaky</span> }</td>
-                            <td>@foreach (var s in r.Stages) { <span class="dot @StageDot(s)" title="@s.Name: @(s.Result ?? s.State) (attempt @s.Attempt)" style="margin-right:2px"></span> }
-                                @if (r.FirstError is not null) { <div class="mono small muted">@Trunc(Fmt.Msg(r.FirstError), 140)</div> }</td>
+                            <td class="tone-muted">@r.Run.Reason</td>
+                            <td>@OutcomeBadge(r.BuildOutcome, r.Run.Status) @if (r.FlakyJobs > 0) { <span class="pill pill--warn" title="a job failed then passed on retry">flaky</span> }</td>
+                            <td><span class="dots">@foreach (var s in r.Stages) { <span class="dot @StageDot(s)" title="@s.Name: @(s.Result ?? s.State) (attempt @s.Attempt)"></span> }</span>
+                                @if (r.FirstError is not null) { <div class="mono text-sm tone-muted">@Trunc(Fmt.Msg(r.FirstError), 140)</div> }</td>
                             <td class="num">@Fmt.Num(r.Minutes, "0")</td>
-                            <td class="person muted">@r.Run.RequestedFor</td>
+                            <td class="person tone-muted">@r.Run.RequestedFor</td>
                             <td><Ago At="r.Run.QueueTime" /></td>
                         </tr>
                     }
@@ -109,25 +111,25 @@ else
             break;
 
         case "prs":
-            <div class="kpis" style="margin-bottom:1rem">
-                <div class="kpi"><div class="label">Time to first review (@h.Prs.FirstReviewLabel)</div><div class="value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="sub">working hours, n=@h.Prs.ReviewedInWindow</div></div>
-                <div class="kpi"><div class="label">Time to merge (@h.Prs.MergeLabel)</div><div class="value">@Fmt.Num(h.Prs.MergeHours)h</div><div class="sub">n=@h.Prs.CompletedInWindow</div></div>
-                <div class="kpi"><div class="label">Active PRs</div><div class="value">@h.Prs.ActiveCount</div><div class="sub">@h.Prs.StuckCount stuck</div></div>
-                <div class="kpi"><div class="label">Oldest active</div><div class="value">@Fmt.Num(h.Prs.OldestActiveWorkingDays)d</div><div class="sub">working days</div></div>
+            <div class="kpi-row mb-4">
+                <div class="kpi"><div class="kpi__label">Time to first review (@h.Prs.FirstReviewLabel)</div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="kpi__sub">working hours, n=@h.Prs.ReviewedInWindow</div></div>
+                <div class="kpi"><div class="kpi__label">Time to merge (@h.Prs.MergeLabel)</div><div class="kpi__value">@Fmt.Num(h.Prs.MergeHours)h</div><div class="kpi__sub">n=@h.Prs.CompletedInWindow</div></div>
+                <div class="kpi"><div class="kpi__label">Active PRs</div><div class="kpi__value">@h.Prs.ActiveCount</div><div class="kpi__sub">@h.Prs.StuckCount stuck</div></div>
+                <div class="kpi"><div class="kpi__label">Oldest active</div><div class="kpi__value">@Fmt.Num(h.Prs.OldestActiveWorkingDays)d</div><div class="kpi__sub">working days</div></div>
             </div>
             <section class="panel">
-                <header><h2>Pull requests</h2><span class="meta">drafts and bots excluded from metrics</span></header>
+                <header class="panel__head"><h2>Pull requests</h2><span class="panel__meta">drafts and bots excluded from metrics</span></header>
                 <table class="t">
                     <thead><tr><th>PR</th><th>Status</th><th class="person">Author</th><th>Waiting on</th><th class="num">1st review</th><th class="num">Merge</th><th>Created</th></tr></thead>
                     <tbody>
                     @foreach (var p in _d.RecentPrs)
                     {
                         <tr>
-                            <td><AdoLink Href="@p.Pr.WebUrl">!@p.Pr.Id</AdoLink> @p.Pr.Title @if (p.Pr.IsDraft) { <span class="badge">draft</span> } @if (p.Pr.AuthorIsBot) { <span class="badge">bot</span> }</td>
-                            <td>@if (p.Stuck) { <span class="badge bad" title="@string.Join(", ", p.StuckReasons)">stuck</span> } else { <span class="badge @(p.Pr.Status == "completed" ? "ok" : p.Pr.Status == "active" ? "info" : "")">@p.Pr.Status</span> }
-                                @if (p.Pr.MergeStatus == "conflicts") { <span class="badge bad">conflicts</span> } @if (p.Pr.PolicyStatus == "rejected") { <span class="badge bad">policy</span> }</td>
+                            <td><AdoLink Href="@p.Pr.WebUrl">!@p.Pr.Id</AdoLink> @p.Pr.Title @if (p.Pr.IsDraft) { <span class="pill">draft</span> } @if (p.Pr.AuthorIsBot) { <span class="pill">bot</span> }</td>
+                            <td>@if (p.Stuck) { <span class="pill pill--bad" title="@string.Join(", ", p.StuckReasons)">stuck</span> } else { <span class="pill pill--@(p.Pr.Status == "completed" ? "ok" : p.Pr.Status == "active" ? "info" : "")">@p.Pr.Status</span> }
+                                @if (p.Pr.MergeStatus == "conflicts") { <span class="pill pill--bad">conflicts</span> } @if (p.Pr.PolicyStatus == "rejected") { <span class="pill pill--bad">policy</span> }</td>
                             <td class="person">@p.Pr.AuthorName</td>
-                            <td class="person small">@string.Join(", ", p.WaitingOn)</td>
+                            <td class="person text-sm">@string.Join(", ", p.WaitingOn)</td>
                             <td class="num">@Fmt.Num(p.FirstReviewWorkingHours)</td>
                             <td class="num">@Fmt.Num(p.MergeWorkingHours)</td>
                             <td><Ago At="p.Pr.CreatedOn" /></td>
@@ -139,14 +141,14 @@ else
             break;
 
         case "deployments":
-            <div class="kpis" style="margin-bottom:1rem">
-                <div class="kpi"><div class="label">Deploys / week to Production</div><div class="value">@h.Delivery.DeploysPerWeek.ToString("0.#")</div><div class="sub">distinct component+version, sim or prod</div></div>
-                <div class="kpi"><div class="label">Lead time (median)</div><div class="value">@Fmt.Hours(h.Delivery.MedianLeadTimeHours ?? 0)</div><div class="sub">PR publish → first Production deploy</div></div>
-                <div class="kpi"><div class="label">…of which approval wait</div><div class="value">@Fmt.Hours(h.Delivery.MedianApprovalWaitHours ?? 0)</div><div class="sub">review @Fmt.Hours(h.Delivery.MedianReviewHours ?? 0) · pipeline @Fmt.Hours(h.Delivery.MedianMergeToDeployHours ?? 0)</div></div>
-                <div class="kpi"><div class="label">Change failure (proxy)</div><div class="value">@Fmt.Pct(h.Delivery.ChangeFailureRateProxy)</div><div class="sub">failed Production deploy stages ÷ all</div></div>
+            <div class="kpi-row mb-4">
+                <div class="kpi"><div class="kpi__label">Deploys / week to Production</div><div class="kpi__value">@h.Delivery.DeploysPerWeek.ToString("0.#")</div><div class="kpi__sub">distinct component+version, sim or prod</div></div>
+                <div class="kpi"><div class="kpi__label">Lead time (median)</div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianLeadTimeHours ?? 0)</div><div class="kpi__sub">PR publish → first Production deploy</div></div>
+                <div class="kpi"><div class="kpi__label">…of which approval wait</div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianApprovalWaitHours ?? 0)</div><div class="kpi__sub">review @Fmt.Hours(h.Delivery.MedianReviewHours ?? 0) · pipeline @Fmt.Hours(h.Delivery.MedianMergeToDeployHours ?? 0)</div></div>
+                <div class="kpi"><div class="kpi__label">Change failure (proxy)</div><div class="kpi__value">@Fmt.Pct(h.Delivery.ChangeFailureRateProxy)</div><div class="kpi__sub">failed Production deploy stages ÷ all</div></div>
             </div>
             <section class="panel">
-                <header><h2>Deployments (60 days)</h2><Info Text="Derived from pipeline stages that match an environment's stagePatterns. Components from skaffold/sqlproj + deploy rules." /></header>
+                <header class="panel__head"><h2>Deployments (60 days)</h2><Info Text="Derived from pipeline stages that match an environment's stagePatterns. Components from skaffold/sqlproj + deploy rules." /></header>
                 <table class="t">
                     <thead><tr><th>When</th><th>Environment</th><th>Component</th><th>Version</th><th>Result</th><th class="num">Approval wait</th><th>Template</th></tr></thead>
                     <tbody>
@@ -154,12 +156,12 @@ else
                     {
                         <tr>
                             <td><Ago At="d.StartTime" /></td>
-                            <td>@d.EnvironmentName @if (d.Tier == EnvironmentTier.Production) { <span class="badge">prod-tier</span> }</td>
+                            <td>@d.EnvironmentName @if (d.Tier == EnvironmentTier.Production) { <span class="pill">prod-tier</span> }</td>
                             <td>@(h.Components.FirstOrDefault(c => c.Id == d.ComponentId)?.Name ?? "(repo)")</td>
                             <td class="mono">@d.Version</td>
                             <td>@OutcomeBadge(ResultClassifier.Classify(d.Result, Config.Current.Results), d.FinishTime is null ? "inProgress" : "completed")</td>
                             <td class="num">@Fmt.Hours(d.WaitSeconds / 3600)</td>
-                            <td class="small muted">@TemplateComplianceEvaluator.BranchName(d.TemplateRef)</td>
+                            <td class="text-sm tone-muted">@TemplateComplianceEvaluator.BranchName(d.TemplateRef)</td>
                         </tr>
                     }
                     </tbody>
@@ -169,7 +171,7 @@ else
 
         case "templates":
             <section class="panel">
-                <header><h2>Template compliance</h2><Info Text="From what actually ran (Runs - Get resources) plus a static YAML parse. main = compliant, next = experimental, anything else = non-compliant. Staleness is informational." /></header>
+                <header class="panel__head"><h2>Template compliance</h2><Info Text="From what actually ran (Runs - Get resources) plus a static YAML parse. main = compliant, next = experimental, anything else = non-compliant. Staleness is informational." /></header>
                 <table class="t">
                     <thead><tr><th>Pipeline</th><th>Ref</th><th>Commit used</th><th>Behind head</th><th>extends</th><th>Inline bypass</th><th>Last run</th><th>Notes</th></tr></thead>
                     <tbody>
@@ -179,20 +181,20 @@ else
                             <td>@t.PipelineName</td>
                             <td>@RefBadge(t)</td>
                             <td class="mono">@Fmt.ShortSha(t.Sha)</td>
-                            <td>@(t.CommitsBehind is { } b ? $"{b} commits / {t.DaysBehind:0}d" : "—") @if (t.Stale) { <span class="badge warn">stale</span> }</td>
+                            <td>@(t.CommitsBehind is { } b ? $"{b} commits / {t.DaysBehind:0}d" : "—") @if (t.Stale) { <span class="pill pill--warn">stale</span> }</td>
                             <td>@(t.UsesExtends ? "✓" : "✗")</td>
                             <td>@(t.InlineBypass ? $"{t.InlineStages} stages, {t.InlineJobs} jobs, {t.InlineSteps} steps" : "—")</td>
                             <td><Ago At="t.LastRunAt" /></td>
-                            <td class="small">@string.Join(" ", t.Notes)</td>
+                            <td class="text-sm">@string.Join(" ", t.Notes)</td>
                         </tr>
                     }
                     </tbody>
                 </table>
                 <h3>Recent template changes</h3>
                 <table class="t"><tbody>
-                @foreach (var c in _d.TemplateCommits.Take(15)) { <tr><td><Ago At="c.Date" /></td><td><span class="badge @(c.Branch == "main" ? "ok" : "info")">@c.Branch</span></td><td class="mono small">@Fmt.ShortSha(c.Sha)</td><td>@c.Message</td></tr> }
+                @foreach (var c in _d.TemplateCommits.Take(15)) { <tr><td><Ago At="c.Date" /></td><td><span class="pill pill--@(c.Branch == "main" ? "ok" : "info")">@c.Branch</span></td><td class="mono text-sm">@Fmt.ShortSha(c.Sha)</td><td>@c.Message</td></tr> }
                 </tbody></table>
-                <div style="margin-top:.5rem"><button @onclick="SummariseTemplates" disabled="@_busy">Summarise what re-running would pick up (Copilot)</button></div>
+                <div class="mt-2"><button class="btn btn--secondary" @onclick="SummariseTemplates" disabled="@_busy">Summarise what re-running would pick up (Copilot)</button></div>
                 @if (_templateSummary is not null) { <pre class="box">@_templateSummary</pre> }
             </section>
             break;
@@ -202,17 +204,17 @@ else
             break;
 
         default:
-            <div class="kpis" style="margin-bottom:1rem">
-                <div class="kpi"><div class="label">Main success (@Config.Current.Metrics.WindowDays d)</div><div class="value @(h.MainSuccessRate < 0.9 ? "bad" : "")">@Fmt.Pct(h.MainSuccessRate)</div><div class="sub">n=@h.CompletedBuildRuns @Trend(h.SuccessRateTrend)</div></div>
-                <div class="kpi"><div class="label">Main red now</div><div class="value @(h.OpenRed is null ? "good" : "bad")">@(h.OpenRed is { } red ? Fmt.Hours((Now - red.Start).TotalHours) : "no")</div><div class="sub">longest @Fmt.Num(h.LongestRedWorkingHours)wh in window</div></div>
-                <div class="kpi"><div class="label">Flaky run rate</div><div class="value">@Fmt.Pct1(h.FlakyRunRate)</div><div class="sub">@h.WastedMinutes.ToString("0") wasted min</div></div>
-                <div class="kpi"><div class="label">Build duration (median)</div><div class="value">@Fmt.Num(h.MedianBuildMinutes, "0")m</div><div class="sub">build stages</div></div>
-                <div class="kpi"><div class="label">Time to first review</div><div class="value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="sub">@h.Prs.FirstReviewLabel, working hours</div></div>
-                <div class="kpi"><div class="label">Last Production deploy</div><div class="value small"><Ago At="h.LastProductionDeploy?.FinishTime" /></div><div class="sub">@h.LastProductionDeploy?.EnvironmentName @h.LastProductionDeploy?.Version</div></div>
+            <div class="kpi-row mb-4">
+                <div class="kpi"><div class="kpi__label">Main success (@Config.Current.Metrics.WindowDays d)</div><div class="kpi__value @(h.MainSuccessRate < 0.9 ? "bad" : "")">@Fmt.Pct(h.MainSuccessRate)</div><div class="kpi__sub">n=@h.CompletedBuildRuns @Trend(h.SuccessRateTrend)</div></div>
+                <div class="kpi"><div class="kpi__label">Main red now</div><div class="kpi__value @(h.OpenRed is null ? "good" : "bad")">@(h.OpenRed is { } red ? Fmt.Hours((Now - red.Start).TotalHours) : "no")</div><div class="kpi__sub">longest @Fmt.Num(h.LongestRedWorkingHours)wh in window</div></div>
+                <div class="kpi"><div class="kpi__label">Flaky run rate</div><div class="kpi__value">@Fmt.Pct1(h.FlakyRunRate)</div><div class="kpi__sub">@h.WastedMinutes.ToString("0") wasted min</div></div>
+                <div class="kpi"><div class="kpi__label">Build duration (median)</div><div class="kpi__value">@Fmt.Num(h.MedianBuildMinutes, "0")m</div><div class="kpi__sub">build stages</div></div>
+                <div class="kpi"><div class="kpi__label">Time to first review</div><div class="kpi__value">@Fmt.Num(h.Prs.FirstReviewHours)h</div><div class="kpi__sub">@h.Prs.FirstReviewLabel, working hours</div></div>
+                <div class="kpi"><div class="kpi__label">Last Production deploy</div><div class="kpi__value text-sm"><Ago At="h.LastProductionDeploy?.FinishTime" /></div><div class="kpi__sub">@h.LastProductionDeploy?.EnvironmentName @h.LastProductionDeploy?.Version</div></div>
             </div>
             <div class="grid-2">
                 <section class="panel">
-                    <header><h2>12-week trends</h2><span class="meta">dashed = template release on main</span></header>
+                    <header class="panel__head"><h2>12-week trends</h2><span class="panel__meta">dashed = template release on main</span></header>
                     <table class="t"><tbody>
                         <tr><td>Main success rate</td><td><Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Width="260" Height="36" Markers="TemplateMarkers()" /></td></tr>
                         <tr><td>Flaky run rate</td><td><Spark Points="h.Weekly.Select(w => (double?)w.FlakyRate).ToList()" Min="0" Width="260" Height="36" Color="var(--warn)" Markers="TemplateMarkers()" /></td></tr>
@@ -220,30 +222,30 @@ else
                     </tbody></table>
                 </section>
                 <section class="panel">
-                    <header><h2>All rules</h2></header>
+                    <header class="panel__head"><h2>All rules</h2></header>
                     <table class="t"><tbody>
                     @foreach (var o in h.Tier.Outcomes.OrderBy(o => Array.IndexOf(TierResult.Order, o.Tier)))
                     {
                         <tr><td><code>@o.RuleId</code></td><td><TierBadge Tier="@o.Tier" /></td><td>@o.Title <Info Text="@(RuleCatalog.Known.GetValueOrDefault(o.RuleId)?.Formula ?? "")" /></td>
-                            <td>@RuleBadge(o.Status)</td><td class="small">@o.Display</td></tr>
+                            <td>@RuleBadge(o.Status)</td><td class="text-sm">@o.Display</td></tr>
                     }
                     </tbody></table>
                 </section>
                 <section class="panel">
-                    <header><h2>Branch policies (default branch)</h2></header>
+                    <header class="panel__head"><h2>Branch policies (default branch)</h2></header>
                     @if (_d.Policies.Count == 0) { <div class="empty">No policies synced.</div> }
                     <table class="t"><tbody>
-                    @foreach (var p in _d.Policies) { <tr><td>@p.TypeName</td><td>@(p.IsEnabled ? (p.IsBlocking ? "required" : "optional") : "disabled")</td><td class="muted small">@p.RefName @(p.MinimumApproverCount is { } n ? $"min {n}" : "")</td></tr> }
+                    @foreach (var p in _d.Policies) { <tr><td>@p.TypeName</td><td>@(p.IsEnabled ? (p.IsBlocking ? "required" : "optional") : "disabled")</td><td class="tone-muted text-sm">@p.RefName @(p.MinimumApproverCount is { } n ? $"min {n}" : "")</td></tr> }
                     </tbody></table>
                 </section>
                 <section class="panel">
-                    <header><h2>Facts</h2><span class="meta">from the static scanner @(h.Facts is { } f ? $"@ {Fmt.ShortSha(f.Sha)}" : "")</span></header>
+                    <header class="panel__head"><h2>Facts</h2><span class="panel__meta">from the static scanner @(h.Facts is { } f ? $"@ {Fmt.ShortSha(f.Sha)}" : "")</span></header>
                     @if (h.Facts is not { } facts) { <div class="empty">Not scanned yet (scans run with audits).</div> }
                     else
                     {
                         <table class="t"><tbody>
                             <tr><td>Languages</td><td>@string.Join(", ", facts.Languages.FileCounts.OrderByDescending(kv => kv.Value).Take(5).Select(kv => $"{kv.Key} ({kv.Value})"))</td></tr>
-                            <tr><td>.NET</td><td>@facts.Dotnet.Solutions.Count solution(s), @facts.Dotnet.Projects.Count project(s); @string.Join(", ", facts.Dotnet.TargetFrameworks) @if (facts.Dotnet.UnsupportedTargetFrameworks.Count > 0) { <span class="badge bad">unsupported: @string.Join(", ", facts.Dotnet.UnsupportedTargetFrameworks)</span> }</td></tr>
+                            <tr><td>.NET</td><td>@facts.Dotnet.Solutions.Count solution(s), @facts.Dotnet.Projects.Count project(s); @string.Join(", ", facts.Dotnet.TargetFrameworks) @if (facts.Dotnet.UnsupportedTargetFrameworks.Count > 0) { <span class="pill pill--bad">unsupported: @string.Join(", ", facts.Dotnet.UnsupportedTargetFrameworks)</span> }</td></tr>
                             <tr><td>Data</td><td>@DataSummary(facts)</td></tr>
                             <tr><td>Messaging</td><td>@(facts.Messaging.UsesServiceBus ? "Service Bus" : "") @(facts.Messaging.UsesMassTransit ? "MassTransit" : "") @(facts.Messaging.UsesNServiceBus ? "NServiceBus" : "") @string.Join(", ", facts.Messaging.QueueOrTopicNames.Take(6))</td></tr>
                             <tr><td>Azure services</td><td>@string.Join(", ", facts.AzureServices)</td></tr>
@@ -290,34 +292,34 @@ else
     private static string Trunc(string s, int n) => s.Length > n ? s[..n] + "…" : s;
     private static string StageDot(TimelineRecord s) => s.Result switch { "succeeded" => "ok", "failed" => "bad", "succeededWithIssues" => "warn", "skipped" => "", _ => s.State == "inProgress" ? "info pulse" : "" };
 
-    private static MarkupString OutcomeBadge(Outcome o, string status) => new(status != "completed" ? "<span class='badge info'>running</span>" : o switch
+    private static MarkupString OutcomeBadge(Outcome o, string status) => new(status != "completed" ? "<span class='pill pill--info'>running</span>" : o switch
     {
-        Outcome.Pass => "<span class='badge ok'>passed</span>",
-        Outcome.Fail => "<span class='badge bad'>failed</span>",
-        Outcome.Excluded => "<span class='badge'>excluded</span>",
-        _ => "<span class='badge'>pending</span>",
+        Outcome.Pass => "<span class='pill pill--ok'>passed</span>",
+        Outcome.Fail => "<span class='pill pill--bad'>failed</span>",
+        Outcome.Excluded => "<span class='pill'>excluded</span>",
+        _ => "<span class='pill'>pending</span>",
     });
 
     private static MarkupString RuleBadge(RuleStatus s) => new(s switch
     {
-        RuleStatus.Pass => "<span class='badge ok'>pass</span>",
-        RuleStatus.Fail => "<span class='badge bad'>fail</span>",
-        RuleStatus.Insufficient => "<span class='badge'>insufficient</span>",
-        RuleStatus.Dormant => "<span class='badge'>dormant</span>",
-        _ => "<span class='badge'>n/a</span>",
+        RuleStatus.Pass => "<span class='pill pill--ok'>pass</span>",
+        RuleStatus.Fail => "<span class='pill pill--bad'>fail</span>",
+        RuleStatus.Insufficient => "<span class='pill'>insufficient</span>",
+        RuleStatus.Dormant => "<span class='pill'>dormant</span>",
+        _ => "<span class='pill'>n/a</span>",
     });
 
     private static MarkupString RefBadge(PipelineTemplateStatus t) => new(t.RefStatus switch
     {
-        TemplateRefStatus.Compliant => $"<span class='badge ok'>{TemplateComplianceEvaluator.BranchName(t.Ref)}</span>",
-        TemplateRefStatus.Experimental => $"<span class='badge {(t.ExperimentalInProduction ? "warn" : "info")}'>{TemplateComplianceEvaluator.BranchName(t.Ref)} (experimental)</span>",
-        TemplateRefStatus.NonCompliant => $"<span class='badge bad'>{TemplateComplianceEvaluator.BranchName(t.Ref)}</span>",
-        TemplateRefStatus.NoTemplate => "<span class='badge bad'>no templates</span>",
-        _ => "<span class='badge'>unknown</span>",
+        TemplateRefStatus.Compliant => $"<span class='pill pill--ok'>{TemplateComplianceEvaluator.BranchName(t.Ref)}</span>",
+        TemplateRefStatus.Experimental => $"<span class='pill pill--{(t.ExperimentalInProduction ? "warn" : "info")}'>{TemplateComplianceEvaluator.BranchName(t.Ref)} (experimental)</span>",
+        TemplateRefStatus.NonCompliant => $"<span class='pill pill--bad'>{TemplateComplianceEvaluator.BranchName(t.Ref)}</span>",
+        TemplateRefStatus.NoTemplate => "<span class='pill pill--bad'>no templates</span>",
+        _ => "<span class='pill'>unknown</span>",
     });
 
     private static MarkupString Trend(double? delta) => delta is null ? new("") :
-        new(delta >= 0.02 ? $"<span class='good'>▲ {delta:P0}</span>" : delta <= -0.02 ? $"<span class='bad'>▼ {-delta:P0}</span>" : "<span class='muted'>≈</span>");
+        new(delta >= 0.02 ? $"<span class='tone-ok'>▲ {delta:P0}</span>" : delta <= -0.02 ? $"<span class='tone-bad'>▼ {-delta:P0}</span>" : "<span class='tone-muted'>≈</span>");
 
     private static string DataSummary(Dashboard.Core.Scanners.RepoFacts f)
     {

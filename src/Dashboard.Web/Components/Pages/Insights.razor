@@ -4,30 +4,32 @@
 @inject IJSRuntime JS
 
 <PageTitle>Insights · DevOps Dashboard</PageTitle>
-<h1>Insights</h1>
+<header class="page-head"><div class="page-head__text"><h1>Insights</h1></div></header>
 
 @if (_m is { } m)
 {
 <div class="grid-2">
     <section class="panel">
-        <header><h2>Same failure across repos</h2><Info Text="First error of failed tasks, normalised and hashed. When the same fingerprint appears in several repos, it's usually a template, agent pool or feed problem — not your code." /></header>
+        <header class="panel__head"><h2>Same failure across repos</h2><Info Text="First error of failed tasks, normalised and hashed. When the same fingerprint appears in several repos, it's usually a template, agent pool or feed problem — not your code." /></header>
         @if (m.CrossRepoFailures.Count == 0) { <div class="empty">No shared failure fingerprints in the window.</div> }
+        <div class="list-divided">
         @foreach (var c in m.CrossRepoFailures.Take(10))
         {
-            <div style="border-bottom:1px solid var(--border);padding:.4rem 0">
-                <div class="mono small">@Fmt.Msg(c.SampleMessage)</div>
-                <div class="small"><b>@c.Repos repos</b>, @c.Runs runs · last <Ago At="c.LastSeen" /> · <span class="muted">@string.Join(", ", c.RepoNames)</span></div>
-                <button style="margin-top:.25rem" @onclick="() => CopyNote(c)">Copy evidence note for the platform team</button>
+            <div>
+                <div class="mono text-sm">@Fmt.Msg(c.SampleMessage)</div>
+                <div class="text-sm"><b>@c.Repos repos</b>, @c.Runs runs · last <Ago At="c.LastSeen" /> · <span class="tone-muted">@string.Join(", ", c.RepoNames)</span></div>
+                <button class="btn btn--secondary mt-1" @onclick="() => CopyNote(c)">Copy evidence note for the platform team</button>
             </div>
         }
-        @if (_copied) { <div class="banner info" style="margin-top:.5rem">Copied.</div> }
+        </div>
+        @if (_copied) { <div class="banner mt-2">Copied.</div> }
     </section>
 
     <section class="panel">
-        <header><h2>Flakiness cost</h2><Info Text="Wasted minutes = duration of failed attempts/runs that later went green without a code change." /></header>
+        <header class="panel__head"><h2>Flakiness cost</h2><Info Text="Wasted minutes = duration of failed attempts/runs that later went green without a code change." /></header>
         <table class="t"><thead><tr><th>Repo</th><th class="num">Wasted min</th><th></th></tr></thead><tbody>
         @{ var max = m.WastedByRepo.Select(w => w.WastedMinutes).DefaultIfEmpty(1).Max(); }
-        @foreach (var w in m.WastedByRepo.Take(12)) { <tr><td><a href="repo/@Uri.EscapeDataString(w.Repo)?tab=pipelines">@w.Repo</a></td><td class="num">@w.WastedMinutes.ToString("0")</td><td style="width:40%"><div class="bar"><span style="width:@((w.WastedMinutes / max * 100).ToString("0"))%"></span></div></td></tr> }
+        @foreach (var w in m.WastedByRepo.Take(12)) { <tr><td><a href="repo/@Uri.EscapeDataString(w.Repo)?tab=pipelines">@w.Repo</a></td><td class="num">@w.WastedMinutes.ToString("0")</td><td class="bar-cell"><div class="bar"><span style="width:@((w.WastedMinutes / max * 100).ToString("0"))%"></span></div></td></tr> }
         </tbody></table>
         <h3>Quarantine candidates</h3>
         @if (m.Quarantine.Count == 0) { <div class="empty">No job was flaky more than once.</div> }
@@ -37,20 +39,20 @@
     </section>
 
     <section class="panel">
-        <header><h2>Fleet outliers</h2><Info Text="Where a repo differs from what most of your repos do (from static facts). Conventions are inferred, not configured." /></header>
+        <header class="panel__head"><h2>Fleet outliers</h2><Info Text="Where a repo differs from what most of your repos do (from static facts). Conventions are inferred, not configured." /></header>
         @if (m.Outliers.Count == 0) { <div class="empty">No outliers (or repos not scanned yet).</div> }
         <table class="t"><thead><tr><th>Repo</th><th>Fact</th><th>Repo</th><th>Most repos</th></tr></thead><tbody>
-        @foreach (var o in m.Outliers.Take(40)) { <tr><td><a href="repo/@Uri.EscapeDataString(o.Repo)">@o.Repo</a></td><td>@o.Fact</td><td class="bad">@o.RepoValue</td><td class="muted">@o.MajorityValue (@o.MajorityShare.ToString("P0") of @o.ApplicableRepos)</td></tr> }
+        @foreach (var o in m.Outliers.Take(40)) { <tr><td><a href="repo/@Uri.EscapeDataString(o.Repo)">@o.Repo</a></td><td>@o.Fact</td><td class="tone-bad">@o.RepoValue</td><td class="tone-muted">@o.MajorityValue (@o.MajorityShare.ToString("P0") of @o.ApplicableRepos)</td></tr> }
         </tbody></table>
     </section>
 
     <section class="panel">
-        <header><h2>Template releases vs. failure rate</h2><Info Text="Fleet-wide CI failure rate in the 3 days before vs after each template commit. A jump after a release is worth raising with the template team." /></header>
+        <header class="panel__head"><h2>Template releases vs. failure rate</h2><Info Text="Fleet-wide CI failure rate in the 3 days before vs after each template commit. A jump after a release is worth raising with the template team." /></header>
         <table class="t"><thead><tr><th>When</th><th>Branch</th><th>Change</th><th class="num">Fail before</th><th class="num">Fail after</th></tr></thead><tbody>
         @foreach (var r in m.TemplateReleases.Take(15))
         {
             var jump = r.FailRateAfter - r.FailRateBefore;
-            <tr><td><Ago At="r.At" /></td><td><span class="badge @(r.Branch == "main" ? "ok" : "info")">@r.Branch</span></td><td class="small">@r.Message</td>
+            <tr><td><Ago At="r.At" /></td><td><span class="pill pill--@(r.Branch == "main" ? "ok" : "info")">@r.Branch</span></td><td class="text-sm">@r.Message</td>
                 <td class="num">@Fmt.Pct(r.FailRateBefore)</td><td class="num @(jump > 0.05 ? "bad" : "")">@Fmt.Pct(r.FailRateAfter)</td></tr>
         }
         </tbody></table>

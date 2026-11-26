@@ -4,16 +4,19 @@
 @inject IJSRuntime JS
 
 <PageTitle>Weekly · DevOps Dashboard</PageTitle>
-<div class="row" style="margin-bottom:.5rem">
-    <h1 style="margin:0">Weekly digest</h1>
-    <span class="muted small">for retros and sprint review — no per-person data</span>
-    <span class="grow"></span>
-    <button @onclick="Copy">Copy Markdown</button>
-    <button @onclick="Download">Download .md</button>
-    <button class="primary" @onclick="Brief" disabled="@_busy">@(_busy ? "Writing…" : "Write brief with Copilot")</button>
-</div>
-@if (_brief is not null) { <section class="panel" style="margin-bottom:1rem"><header><h2>Brief</h2></header><pre class="box">@_brief</pre></section> }
-<section class="panel"><pre class="box" style="max-height:none">@_digest</pre></section>
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>Weekly digest</h1>
+        <p class="page-head__headline">for retros and sprint review — no per-person data</p>
+    </div>
+    <div class="page-head__actions">
+        <button class="btn btn--secondary" @onclick="Copy">Copy Markdown</button>
+    <button class="btn btn--secondary" @onclick="Download">Download .md</button>
+    <button class="btn btn--primary" @onclick="Brief" disabled="@_busy">@(_busy ? "Writing…" : "Write brief with Copilot")</button>
+    </div>
+</header>
+@if (_brief is not null) { <section class="panel mb-4"><header class="panel__head"><h2>Brief</h2></header><pre class="box">@_brief</pre></section> }
+<section class="panel"><pre class="box is-full">@_digest</pre></section>
 
 @code {
     private string _digest = "";

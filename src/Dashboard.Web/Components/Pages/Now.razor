@@ -5,12 +5,14 @@
 
 <PageTitle>Now · DevOps Dashboard</PageTitle>
 
-<div class="row" style="margin-bottom:.5rem">
-    <h1 style="margin:0">What's happening now</h1>
-    <span class="muted small">as of <Ago At="_model?.GeneratedAt" /></span>
-</div>
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>What's happening now</h1>
+        <p class="page-head__headline">as of <Ago At="_model?.GeneratedAt" /></p>
+    </div>
+</header>
 
-@if (LoadError is not null) { <div class="banner bad">@LoadError</div> }
+@if (LoadError is not null) { <div class="banner banner--bad">@LoadError</div> }
 @if (Loading && _model is null) { <div class="empty">Loading…</div> }
 else if (_model is { } m)
 {
@@ -21,73 +23,77 @@ else if (_model is { } m)
         {
             case "sinceLastLooked":
                 <section class="panel">
-                    <header><h2>Since you last looked</h2><span class="meta">@(m.SinceLastLooked.Since is { } s ? "since " + Config.WorkingHours.ToLocal(s).ToString("ddd HH:mm") : "last 24h")</span></header>
-                    <div class="kpis">
-                        <div class="kpi"><div class="label">Main/CI failures</div><div class="value @(m.SinceLastLooked.Failures > 0 ? "bad" : "")">@m.SinceLastLooked.Failures</div></div>
-                        <div class="kpi"><div class="label">PRs merged</div><div class="value">@m.SinceLastLooked.Merged</div></div>
-                        <div class="kpi"><div class="label">Production deploys</div><div class="value good">@m.SinceLastLooked.ProdDeploys</div><div class="sub">sim + prod</div></div>
-                        <div class="kpi"><div class="label">New approvals for you</div><div class="value @(m.SinceLastLooked.NewApprovals > 0 ? "warnc" : "")">@m.SinceLastLooked.NewApprovals</div></div>
+                    <header class="panel__head"><h2>Since you last looked</h2><span class="panel__meta">@(m.SinceLastLooked.Since is { } s ? "since " + Config.WorkingHours.ToLocal(s).ToString("ddd HH:mm") : "last 24h")</span></header>
+                    <div class="kpi-row">
+                        <div class="kpi"><div class="kpi__label">Main/CI failures</div><div class="kpi__value @(m.SinceLastLooked.Failures > 0 ? "bad" : "")">@m.SinceLastLooked.Failures</div></div>
+                        <div class="kpi"><div class="kpi__label">PRs merged</div><div class="kpi__value">@m.SinceLastLooked.Merged</div></div>
+                        <div class="kpi"><div class="kpi__label">Production deploys</div><div class="kpi__value good">@m.SinceLastLooked.ProdDeploys</div><div class="kpi__sub">sim + prod</div></div>
+                        <div class="kpi"><div class="kpi__label">New approvals for you</div><div class="kpi__value @(m.SinceLastLooked.NewApprovals > 0 ? "warnc" : "")">@m.SinceLastLooked.NewApprovals</div></div>
                     </div>
                 </section>
                 break;
             case "attention":
                 <section class="panel">
-                    <header><h2>Needs attention</h2><span class="badge @(m.Attention.Count > 0 ? "bad" : "ok")">@m.Attention.Count</span>
-                        <span class="meta">ranked: your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
-                    @if (m.Attention.Count == 0) { <div class="empty">Nothing needs you right now. 🎉</div> }
-                    <div class="queue">
+                    <header class="panel__head"><h2>Needs attention</h2><span class="pill pill--@(m.Attention.Count > 0 ? "bad" : "ok")">@m.Attention.Count</span>
+                        <span class="panel__meta">ranked: your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
+                    @if (m.Attention.Count == 0) { <div class="empty">Nothing needs you right now.</div> }
+                    <ul class="att-list">
                         @foreach (var a in m.Attention.Take(_showAll ? 500 : 25))
                         {
-                            <div class="qitem k@((int)a.Kind)">
-                                <div class="icon">@Icon(a.Kind)</div>
-                                <div>
-                                    <div class="title">@if (a.Badge is not null) { <span class="badge bad">@a.Badge</span> } <a href="repo/@Uri.EscapeDataString(a.RepoName)">@a.Title</a></div>
-                                    <div class="detail">@a.Detail</div>
+                            <li class="att att--@Tone(a.Kind)">
+                                <div class="att__body">
+                                    <div>@if (a.Badge is not null) { <span class="pill pill--bad">@a.Badge</span> } <a class="att__title" href="repo/@Uri.EscapeDataString(a.RepoName)">@a.Title</a></div>
+                                    <div class="att__detail">@a.Detail</div>
                                 </div>
-                                <div class="when"><Ago At="a.Since" /><br /><AdoLink Href="@a.Link">open in ADO ↗</AdoLink></div>
-                            </div>
+                                <div class="att__side"><Ago At="a.Since" /><AdoLink Href="@a.Link">Open in ADO ↗</AdoLink></div>
+                            </li>
                         }
-                    </div>
-                    @if (m.Attention.Count > 25 && !_showAll) { <button style="margin-top:.5rem" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
+                    </ul>
+                    @if (m.Attention.Count > 25 && !_showAll) { <button class="btn btn--secondary mt-2" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
                 </section>
                 break;
             case "matrix":
                 <section class="panel">
-                    <header><h2>Components × environments</h2><Info Text="Latest successful deployment per component and environment (derived from pipeline stages). ⚠ = sim and prod on different versions. +N = commits merged since the deployed build was queued." />
-                        <span class="meta"><label><input type="checkbox" @bind="_matrixProdOnly" /> only components with Production deploys</label></span></header>
+                    <header class="panel__head"><h2>Components × environments</h2><Info Text="Latest successful deployment per component and environment (derived from pipeline stages). ⚠ = sim and prod on different versions. +N = commits merged since the deployed build was queued." />
+                        <span class="panel__meta"><label><input type="checkbox" @bind="_matrixProdOnly" /> only components with Production deploys</label></span></header>
                     @if (m.Matrix.Count == 0) { <div class="empty">No deployments synced yet.</div> }
                     else
                     {
                         <div class="table-wrap">
-                        <table class="t matrix">
+                        <table class="t compact matrix">
                             <thead><tr><th>Repo</th>@foreach (var e in m.Environments) { <th>@e</th> }</tr></thead>
                             <tbody>
                             @foreach (var g in MatrixGroups(m))
                             {
                                 <tr>
-                                    <td class="mrepo"><a href="repo/@Uri.EscapeDataString(g.RepoName)">@g.RepoName</a>
-                                        @if (g.Components.Count == 1) { <div class="small muted">@g.Components[0]</div> }
-                                        else if (g.Components.Count > 1) { <div class="small muted" title="@string.Join("\n", g.Components)">@g.Components.Count components</div> }</td>
+                                    <td class="nowrap"><a href="repo/@Uri.EscapeDataString(g.RepoName)">@g.RepoName</a>
+                                        @if (g.Components.Count == 1) { <div class="text-sm tone-muted">@g.Components[0]</div> }
+                                        else if (g.Components.Count > 1) { <div class="text-sm tone-muted" title="@string.Join("\n", g.Components)">@g.Components.Count components</div> }</td>
                                     @{ string? prev = null; }
                                     @foreach (var e in m.Environments)
                                     {
                                         var cell = g.Row.Cells.GetValueOrDefault(e);
                                         var d = cell?.Latest;
                                         var same = d is not null && prev is not null && d.Version == prev;
-                                        <td class="cell">
-                                            @if (d is null && cell?.InProgress is null) { <span class="muted">—</span> }
+                                        <td class="ver-cell @(d is null && cell?.InProgress is null ? "is-empty" : "") @(same ? "is-same" : "") @(cell?.Drift == true ? "is-drift" : "")" title="@d?.Version">
+                                            @if (d is null && cell?.InProgress is null) { <span>—</span> }
                                             else
                                             {
-                                                <div class="cellv @(cell!.Drift ? "drift" : "") @(same ? "same" : "")" title="@d?.Version">
-                                                    @if (d is not null)
-                                                    {
-                                                        var (br, num) = ShortVer(d.Version, g.RepoName);
-                                                        @if (same) { <span class="ver">= same</span> }
-                                                        else { <span class="ver">@if (br is not null) { <span class="br @(IsMain(br) ? "" : "feat")">@br</span> }@num @(cell.Drift ? "⚠" : "")</span> }
-                                                        <span class="age"><Ago At="d.FinishTime" />@if (cell.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</span>
-                                                    }
-                                                    @if (cell.InProgress is { } ip) { <span class="badge info"><span class="dot info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying")</span> }
-                                                </div>
+                                                @if (d is not null)
+                                                {
+                                                    var (br, num) = ShortVer(d.Version, g.RepoName);
+                                                    <div class="ver-cell__main">
+                                                        @if (same) { <span>= same</span> }
+                                                        else
+                                                        {
+                                                            @if (br is not null && !IsMain(br)) { <span class="pill pill--ref is-nondefault" title="@br">@br</span> }
+                                                            <span class="ver">@num</span>
+                                                            @if (cell!.Drift) { <span class="tone-warn" title="sim and prod run different versions">⚠</span> }
+                                                        }
+                                                    </div>
+                                                    <div class="ver-cell__meta"><Ago At="d.FinishTime" />@if (cell!.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</div>
+                                                }
+                                                @if (cell!.InProgress is { } ip) { <span class="pill pill--info"><span class="dot dot--info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying")</span> }
                                             }
                                         </td>
                                         prev = d?.Version ?? prev;
@@ -102,7 +108,7 @@ else if (_model is { } m)
                 break;
             case "running":
                 <section class="panel">
-                    <header><h2>Running &amp; queued</h2><span class="badge info">@m.Running.Count</span></header>
+                    <header class="panel__head"><h2>Running &amp; queued</h2><span class="pill pill--info">@m.Running.Count</span></header>
                     @if (m.Running.Count == 0) { <div class="empty">Nothing running.</div> }
                     else
                     {
@@ -115,9 +121,9 @@ else if (_model is { } m)
                                     <td><a href="repo/@Uri.EscapeDataString(r.RepoName)">@r.RepoName</a></td>
                                     <td>@r.PipelineName</td>
                                     <td><AdoLink Href="@r.Run.WebUrl">@r.Run.BuildNumber</AdoLink></td>
-                                    <td>@if (r.WaitingApproval) { <span class="badge warn">⏸ approval</span> } @(r.CurrentStage ?? (r.Run.Status == "notStarted" ? "queued" : "—")) @if (r.Environment is not null) { <span class="muted small">→ @r.Environment</span> }</td>
-                                    <td class="muted">@r.Run.Reason</td>
-                                    <td class="person muted">@r.Run.RequestedFor</td>
+                                    <td>@if (r.WaitingApproval) { <span class="pill pill--warn">⏸ approval</span> } @(r.CurrentStage ?? (r.Run.Status == "notStarted" ? "queued" : "—")) @if (r.Environment is not null) { <span class="tone-muted text-sm">→ @r.Environment</span> }</td>
+                                    <td class="tone-muted">@r.Run.Reason</td>
+                                    <td class="person tone-muted">@r.Run.RequestedFor</td>
                                     <td><Ago At="r.Run.QueueTime" /></td>
                                 </tr>
                             }
@@ -128,7 +134,7 @@ else if (_model is { } m)
                 break;
             case "shipped":
                 <section class="panel">
-                    <header><h2>Shipped in the last @Config.Current.NowView.ShippedHours h</h2><span class="badge ok">@m.Shipped.Count</span></header>
+                    <header class="panel__head"><h2>Shipped in the last @Config.Current.NowView.ShippedHours h</h2><span class="pill pill--ok">@m.Shipped.Count</span></header>
                     @if (m.Shipped.Count == 0) { <div class="empty">Nothing shipped.</div> }
                     else
                     {
@@ -136,7 +142,7 @@ else if (_model is { } m)
                             <tbody>
                             @foreach (var sh in m.Shipped)
                             {
-                                <tr><td class="nowrap"><Ago At="sh.At" /></td><td>@(sh.Kind == "deploy" ? "🚀" : "🔀")</td><td><a href="repo/@Uri.EscapeDataString(sh.RepoName)">@sh.RepoName</a></td><td><AdoLink Href="@sh.Link">@sh.What</AdoLink></td></tr>
+                                <tr><td class="nowrap"><Ago At="sh.At" /></td><td><span class="pill">@(sh.Kind == "deploy" ? "deploy" : "merge")</span></td><td><a href="repo/@Uri.EscapeDataString(sh.RepoName)">@sh.RepoName</a></td><td><AdoLink Href="@sh.Link">@sh.What</AdoLink></td></tr>
                             }
                             </tbody>
                         </table>
@@ -194,15 +200,11 @@ else if (_model is { } m)
         }
     }
 
-    private static string Icon(AttentionKind k) => k switch
+    private static string Tone(AttentionKind k) => k switch
     {
-        AttentionKind.ApprovalForMe => "✋",
-        AttentionKind.GateBlocked => "🚧",
-        AttentionKind.MainRed => "🔴",
-        AttentionKind.TestsFailing => "🧪",
-        AttentionKind.ProductionDeployFailed => "💥",
-        AttentionKind.StuckRelease => "🐢",
-        AttentionKind.StuckPr => "⏳",
-        _ => "❌",
+        AttentionKind.ApprovalForMe or AttentionKind.GateBlocked => "you",
+        AttentionKind.MainRed or AttentionKind.ProductionDeployFailed => "bad",
+        AttentionKind.StuckRelease or AttentionKind.TestsFailing => "warn",
+        _ => "info",
     };
 }

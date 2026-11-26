@@ -10,26 +10,26 @@
 @using Dashboard.Web.Data
 
 <PageTitle>Settings · DevOps Dashboard</PageTitle>
-<h1>Settings &amp; setup</h1>
+<header class="page-head"><div class="page-head__text"><h1>Settings &amp; setup</h1></div></header>
 
 <div class="grid-2">
     <section class="panel">
-        <header><h2>Repositories</h2><span class="meta">@_repos.Count(r => r.Assigned) assigned of @_repos.Count in <b>@Config.Current.AzureDevOps.Project</b></span></header>
+        <header class="panel__head"><h2>Repositories</h2><span class="panel__meta">@_repos.Count(r => r.Assigned) assigned of @_repos.Count in <b>@Config.Current.AzureDevOps.Project</b></span></header>
         <div class="filters">
-            <input type="search" placeholder="Search repos in the project…" @bind="_q" @bind:event="oninput" />
+            <input type="search" class="input" placeholder="Search repos in the project…" @bind="_q" @bind:event="oninput" />
             <label><input type="checkbox" @bind="_assignedOnly" /> assigned only</label>
-            <button @onclick='() => Admin.EnqueueAsync("daily")' title="Re-list repositories from Azure DevOps">Refresh list</button>
+            <button class="btn btn--secondary" @onclick='() => Admin.EnqueueAsync("daily")' title="Re-list repositories from Azure DevOps">Refresh list</button>
         </div>
-        <div style="max-height:520px;overflow:auto">
+        <div class="table-wrap is-scroll">
         <table class="t"><thead><tr><th></th><th>Repo</th><th>Type</th><th>Size</th><th>Backfill</th></tr></thead><tbody>
         @foreach (var r in _repos.Where(r => (!_assignedOnly || r.Assigned) && (_q.Length == 0 || r.Name.Contains(_q, StringComparison.OrdinalIgnoreCase))))
         {
             <tr>
                 <td><input type="checkbox" checked="@r.Assigned" disabled="@r.IsDisabled" @onchange="e => Assign(r, (bool)e.Value!)" /></td>
-                <td>@if (r.Assigned) { <a href="repo/@Uri.EscapeDataString(r.Name)">@r.Name</a> } else { @r.Name } @if (r.IsDisabled) { <span class="badge">disabled</span> }</td>
-                <td>@if (r.Assigned) { <select value="@RepoTypes.Resolve(r.Name, r.Type, TypeCfg.Current)" @onchange="e => SetType(r, e)" title="Name patterns (end2end_*, *-e2e-*, *-load-*) apply while this is Service; repos.types in config wins"><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select> }</td>
-                <td class="muted small">@((r.SizeBytes / 1024.0 / 1024).ToString("0.#")) MB</td>
-                <td class="small">@if (r.Assigned) { if (r.BackfilledAt is { } b) { <Ago At="b" /> } else { <span class="badge info">queued</span> } }</td>
+                <td>@if (r.Assigned) { <a href="repo/@Uri.EscapeDataString(r.Name)">@r.Name</a> } else { @r.Name } @if (r.IsDisabled) { <span class="pill">disabled</span> }</td>
+                <td>@if (r.Assigned) { <select class="select" value="@RepoTypes.Resolve(r.Name, r.Type, TypeCfg.Current)" @onchange="e => SetType(r, e)" title="Name patterns (end2end_*, *-e2e-*, *-load-*) apply while this is Service; repos.types in config wins"><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select> }</td>
+                <td class="tone-muted text-sm">@((r.SizeBytes / 1024.0 / 1024).ToString("0.#")) MB</td>
+                <td class="text-sm">@if (r.Assigned) { if (r.BackfilledAt is { } b) { <Ago At="b" /> } else { <span class="pill pill--info">queued</span> } }</td>
             </tr>
         }
         </tbody></table>
@@ -38,45 +38,45 @@
 
     <div class="stack">
         <section class="panel">
-            <header><h2>Azure DevOps connection</h2><span class="meta">@(Ado.IsMock ? "mock mode (synthetic data)" : $"live: {Config.Current.AzureDevOps.Organization}/{Config.Current.AzureDevOps.Project}")</span></header>
-            <p class="small muted">PAT scopes needed (read only): Code, Build, Project and team, Test management, Identity (read), Graph (read). <code>vso.environment_manage</code> is not needed — deployments are derived from pipeline stages.</p>
-            <button @onclick="Probe" disabled="@_probing">@(_probing ? "Checking…" : "Check PAT scopes")</button>
+            <header class="panel__head"><h2>Azure DevOps connection</h2><span class="panel__meta">@(Ado.IsMock ? "mock mode (synthetic data)" : $"live: {Config.Current.AzureDevOps.Organization}/{Config.Current.AzureDevOps.Project}")</span></header>
+            <p class="text-sm tone-muted">PAT scopes needed (read only): Code, Build, Project and team, Test management, Identity (read), Graph (read). <code>vso.environment_manage</code> is not needed — deployments are derived from pipeline stages.</p>
+            <button class="btn btn--secondary" @onclick="Probe" disabled="@_probing">@(_probing ? "Checking…" : "Check PAT scopes")</button>
             @if (_probe is not null)
             {
-                <table class="t" style="margin-top:.5rem"><tbody>
-                @foreach (var p in _probe) { <tr><td>@(p.Ok ? "✅" : "❌")</td><td>@p.Area</td><td class="mono small">@p.Scope</td><td class="small @(p.Ok ? "muted" : "bad")">@p.Detail</td></tr> }
+                <table class="t mt-2"><tbody>
+                @foreach (var p in _probe) { <tr><td><span class="@(p.Ok ? "tone-ok" : "tone-bad")">@(p.Ok ? "✓" : "✕")</span></td><td>@p.Area</td><td class="mono text-sm">@p.Scope</td><td class="text-sm @(p.Ok ? "tone-muted" : "tone-bad")">@p.Detail</td></tr> }
                 </tbody></table>
             }
         </section>
 
         <section class="panel">
-            <header><h2>Copilot auditor</h2></header>
-            <button @onclick="AuditorStatus" disabled="@_checkingAuditor">@(_checkingAuditor ? "Checking…" : "Check auditor")</button>
+            <header class="panel__head"><h2>Copilot auditor</h2></header>
+            <button class="btn btn--secondary" @onclick="AuditorStatus" disabled="@_checkingAuditor">@(_checkingAuditor ? "Checking…" : "Check auditor")</button>
             @if (_auditor is { } a)
             {
-                <table class="t" style="margin-top:.5rem"><tbody>
-                    <tr><td>Engine</td><td>@a.Engine @(a.Ready ? "✅" : "❌")</td></tr>
+                <table class="t mt-2"><tbody>
+                    <tr><td>Engine</td><td>@a.Engine <span class="@(a.Ready ? "tone-ok" : "tone-bad")">@(a.Ready ? "✓ ready" : "✕ not ready")</span></td></tr>
                     <tr><td>Authenticated</td><td>@(a.Authenticated ? "yes" : "no") @a.Login</td></tr>
                     <tr><td>Selected model</td><td>@a.SelectedModel</td></tr>
-                    <tr><td>Models</td><td class="small">@string.Join(", ", a.Models)</td></tr>
+                    <tr><td>Models</td><td class="text-sm">@string.Join(", ", a.Models)</td></tr>
                     <tr><td>SDK</td><td>@a.SdkVersion</td></tr>
-                    @if (a.Error is not null) { <tr><td>Error</td><td class="bad small">@a.Error</td></tr> }
+                    @if (a.Error is not null) { <tr><td>Error</td><td class="bad text-sm">@a.Error</td></tr> }
                 </tbody></table>
             }
-            <p class="small muted">Login once: <code>docker compose run --rm auditor login</code> (device code), then set <code>AUDITOR_ENGINE=copilot</code> in .env and <code>docker compose up -d</code>.</p>
+            <p class="text-sm tone-muted">Login once: <code>docker compose run --rm auditor login</code> (device code), then set <code>AUDITOR_ENGINE=copilot</code> in .env and <code>docker compose up -d</code>.</p>
         </section>
 
         <section class="panel">
-            <header><h2>Configuration</h2><span class="meta">loaded <Ago At="Config.LoadedAt" /> · hash @Config.Hash</span></header>
-            <div class="mono small">@Config.Path</div>
-            <div class="row" style="margin:.5rem 0"><button @onclick="Reload">Reload config</button><button @onclick="Rederive">Re-derive deployments</button><button @onclick="Backup">Back up database now</button></div>
-            @if (_message is not null) { <div class="banner info">@_message</div> }
-            @foreach (var e in Config.LastLoadErrors) { <div class="banner bad">@e</div> }
-            @foreach (var w in Config.LastLoadWarnings) { <div class="banner warn">@w</div> }
+            <header class="panel__head"><h2>Configuration</h2><span class="panel__meta">loaded <Ago At="Config.LoadedAt" /> · hash @Config.Hash</span></header>
+            <div class="mono text-sm">@Config.Path</div>
+            <div class="row mt-2 mb-2"><button class="btn btn--secondary" @onclick="Reload">Reload config</button><button class="btn btn--secondary" @onclick="Rederive">Re-derive deployments</button><button class="btn btn--secondary" @onclick="Backup">Back up database now</button></div>
+            @if (_message is not null) { <div class="banner">@_message</div> }
+            @foreach (var e in Config.LastLoadErrors) { <div class="banner banner--bad">@e</div> }
+            @foreach (var w in Config.LastLoadWarnings) { <div class="banner banner--warn">@w</div> }
             <h3>Environments</h3>
-            <table class="t"><tbody>@foreach (var e in Config.Current.Environments.OrderBy(e => e.Order)) { <tr><td>@e.Name</td><td><span class="badge @(e.Tier == EnvironmentTier.Production ? "bad" : "")">@e.Tier</span></td><td class="mono small">@string.Join("  ", e.StagePatterns)</td><td class="small">@(e.AdoId is { } id ? $"adoId {id}" : "")</td></tr> }</tbody></table>
+            <table class="t"><tbody>@foreach (var e in Config.Current.Environments.OrderBy(e => e.Order)) { <tr><td>@e.Name</td><td><span class="pill pill--@(e.Tier == EnvironmentTier.Production ? "bad" : "")">@e.Tier</span></td><td class="mono text-sm">@string.Join("  ", e.StagePatterns)</td><td class="text-sm">@(e.AdoId is { } id ? $"adoId {id}" : "")</td></tr> }</tbody></table>
             <h3>Notifications</h3>
-            <button @onclick="EnableNotifications">Enable browser notifications</button> <span class="small muted">@_notif</span>
+            <button class="btn btn--secondary" @onclick="EnableNotifications">Enable browser notifications</button> <span class="text-sm tone-muted">@_notif</span>
         </section>
     </div>
 </div>

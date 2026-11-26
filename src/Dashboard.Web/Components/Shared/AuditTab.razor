@@ -8,45 +8,45 @@
     var running = Detail.Audits.FirstOrDefault(a => a.Status is AuditStatus.Queued or AuditStatus.Running);
     var failedLast = Detail.Audits.FirstOrDefault() is { Status: AuditStatus.Failed } f0 ? f0 : null;
 }
-<div class="row" style="margin-bottom:.75rem">
-    <button class="primary" @onclick="AuditNow" disabled="@(_queued || running is not null)">@(running is not null ? $"Audit {running.Status.ToString().ToLowerInvariant()}…" : _queued ? "Queued…" : "Audit now")</button>
-    <span class="muted small">Audits re-run automatically when the default branch moves (at most once per @Config.Current.Audit.MinHoursBetweenAudits h unless build/deploy files change). Facts are computed statically; Copilot judges the rest with read-only access to an immutable worktree.</span>
+<div class="row mb-3">
+    <button class="btn btn--primary" @onclick="AuditNow" disabled="@(_queued || running is not null)">@(running is not null ? $"Audit {running.Status.ToString().ToLowerInvariant()}…" : _queued ? "Queued…" : "Audit now")</button>
+    <span class="tone-muted text-sm">Audits re-run automatically when the default branch moves (at most once per @Config.Current.Audit.MinHoursBetweenAudits h unless build/deploy files change). Facts are computed statically; Copilot judges the rest with read-only access to an immutable worktree.</span>
 </div>
-@if (failedLast is not null) { <div class="banner warn">Last audit failed <Ago At="failedLast.CompletedAt" />: @failedLast.Error</div> }
+@if (failedLast is not null) { <div class="banner banner--warn">Last audit failed <Ago At="failedLast.CompletedAt" />: @failedLast.Error</div> }
 
 @if (latest is null) { <div class="empty">No completed audit yet.</div> }
 else
 {
     <div class="grid-2">
         <section class="panel">
-            <header><h2>Latest audit</h2><span class="meta">@Dashboard.Web.Services.Fmt.ShortSha(latest.Sha) · <Ago At="latest.CompletedAt" /> · @latest.Engine @latest.Model · rubric @latest.RubricVersion @(latest.Votes > 1 ? $"· {latest.Votes} votes" : "") @if (latest.IsBaseline) { <span class="badge info" title="Model, rubric or prompt changed — not compared with earlier audits">baseline</span> }</span></header>
-            <p><b>Architecture:</b> <span class="badge info">@latest.ArchitectureStyle</span></p>
+            <header class="panel__head"><h2>Latest audit</h2><span class="panel__meta">@Dashboard.Web.Services.Fmt.ShortSha(latest.Sha) · <Ago At="latest.CompletedAt" /> · @latest.Engine @latest.Model · rubric @latest.RubricVersion @(latest.Votes > 1 ? $"· {latest.Votes} votes" : "") @if (latest.IsBaseline) { <span class="pill pill--info" title="Model, rubric or prompt changed — not compared with earlier audits">baseline</span> }</span></header>
+            <p><b>Architecture:</b> <span class="pill pill--info">@latest.ArchitectureStyle</span></p>
             @if (Result(latest) is { } r)
             {
-                <p class="small">@r.ArchitectureRationale</p>
-                @if (r.ArchitectureEvidence.Count > 0) { <div class="small muted">Evidence: @string.Join(", ", r.ArchitectureEvidence.Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")))</div> }
+                <p class="text-sm">@r.ArchitectureRationale</p>
+                @if (r.ArchitectureEvidence.Count > 0) { <div class="text-sm tone-muted">Evidence: @string.Join(", ", r.ArchitectureEvidence.Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")))</div> }
                 <h3>Summary</h3><p>@r.Summary</p>
                 @if (r.AzureDependencies.Count > 0) { <p><b>Azure dependencies:</b> @string.Join(", ", r.AzureDependencies)</p> }
             }
         </section>
         <section class="panel">
-            <header><h2>Since previous audit</h2></header>
+            <header class="panel__head"><h2>Since previous audit</h2></header>
             @{
                 var prev = Detail.Audits.Where(a => a.Status == AuditStatus.Succeeded && a.Id != latest.Id).FirstOrDefault();
                 var newCount = Detail.Findings.Count(x => x.State is { } s && prev is not null && s.FirstSeen > prev.CompletedAt);
                 var openCount = Detail.Findings.Count(x => x.State?.Status is FindingStatus.New or FindingStatus.Accepted);
             }
-            <div class="kpis">
-                <div class="kpi"><div class="label">Open findings</div><div class="value">@openCount</div></div>
-                <div class="kpi"><div class="label">New since previous</div><div class="value">@(prev is null ? "—" : newCount.ToString())</div></div>
-                <div class="kpi"><div class="label">Checks passing</div><div class="value good">@Detail.Findings.Count(x => x.Finding.Result == CheckResult.Pass)</div></div>
+            <div class="kpi-row">
+                <div class="kpi"><div class="kpi__label">Open findings</div><div class="kpi__value">@openCount</div></div>
+                <div class="kpi"><div class="kpi__label">New since previous</div><div class="kpi__value">@(prev is null ? "—" : newCount.ToString())</div></div>
+                <div class="kpi"><div class="kpi__label">Checks passing</div><div class="kpi__value good">@Detail.Findings.Count(x => x.Finding.Result == CheckResult.Pass)</div></div>
             </div>
-            @if (latest.IsBaseline) { <p class="small muted">This audit is a new baseline (model/rubric/prompt changed); "new" counts start from here.</p> }
+            @if (latest.IsBaseline) { <p class="text-sm tone-muted">This audit is a new baseline (model/rubric/prompt changed); "new" counts start from here.</p> }
         </section>
     </div>
 
-    <section class="panel" style="margin-top:1rem">
-        <header><h2>Checks &amp; findings</h2><span class="meta"><label><input type="checkbox" @bind="_hidePass" /> hide passing</label></span></header>
+    <section class="panel mt-4">
+        <header class="panel__head"><h2>Checks &amp; findings</h2><span class="panel__meta"><label><input type="checkbox" @bind="_hidePass" /> hide passing</label></span></header>
         <div class="table-wrap">
         <table class="t findings">
             <colgroup><col style="width:15%" /><col style="width:8%" /><col style="width:42%" /><col style="width:20%" /><col style="width:15%" /></colgroup>
@@ -56,21 +56,21 @@ else
             {
                 var fnd = row.Finding;
                 <tr>
-                    <td><code>@fnd.CheckId</code><div class="small muted">@fnd.Title</div>@if (fnd.Component is not null) { <span class="chip">@fnd.Component</span> }</td>
-                    <td>@ResultBadge(fnd.Result) @if (fnd.Uncertain) { <span class="badge warn" title="votes disagreed or evidence could not be verified">uncertain</span> } <div><span class="badge @(fnd.Severity == "high" ? "bad" : fnd.Severity == "medium" ? "warn" : "")">@fnd.Severity</span></div><div class="muted small">@fnd.Kind</div></td>
-                    <td class="small finding"><div>@fnd.Explanation</div>@if (!string.IsNullOrWhiteSpace(fnd.Recommendation)) { <div class="do"><b>Do:</b> @fnd.Recommendation</div> }</td>
-                    <td class="small mono ev">@foreach (var ev in Evidence(fnd).Take(4)) { <div title="@ev">@ShortPath(ev)</div> }</td>
-                    <td>@if (row.State is { } st) { <span class="badge @(st.Status == FindingStatus.Done ? "ok" : st.Status == FindingStatus.Dismissed ? "" : "warn")" title="@st.Reason">@st.Status</span> }
+                    <td><code>@fnd.CheckId</code><div class="text-sm tone-muted">@fnd.Title</div>@if (fnd.Component is not null) { <span class="chip">@fnd.Component</span> }</td>
+                    <td>@ResultBadge(fnd.Result) @if (fnd.Uncertain) { <span class="pill pill--warn" title="votes disagreed or evidence could not be verified">uncertain</span> } <div><span class="pill pill--@(fnd.Severity == "high" ? "bad" : fnd.Severity == "medium" ? "warn" : "")">@fnd.Severity</span></div><div class="tone-muted text-sm">@fnd.Kind</div></td>
+                    <td class="text-sm finding"><div>@fnd.Explanation</div>@if (!string.IsNullOrWhiteSpace(fnd.Recommendation)) { <div class="do"><b>Do:</b> @fnd.Recommendation</div> }</td>
+                    <td class="text-sm mono ev">@foreach (var ev in Evidence(fnd).Take(4)) { <div title="@ev">@ShortPath(ev)</div> }</td>
+                    <td>@if (row.State is { } st) { <span class="pill pill--@(st.Status == FindingStatus.Done ? "ok" : st.Status == FindingStatus.Dismissed ? "" : "warn")" title="@st.Reason">@st.Status</span> }
                     <div class="factions">
                         @if (row.State is { } s2 && fnd.Result is CheckResult.Fail or CheckResult.Partial)
                         {
-                            @if (s2.Status == FindingStatus.New) { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.Accepted, null)">Accept</button> }
+                            @if (s2.Status == FindingStatus.New) { <button class="btn btn--secondary" @onclick="() => Set(s2.Fingerprint, FindingStatus.Accepted, null)">Accept</button> }
                             @if (s2.Status != FindingStatus.Dismissed)
                             {
-                                <select value="@(_reason.GetValueOrDefault(s2.Fingerprint) ?? "")" @onchange="e => _reason[s2.Fingerprint] = e.Value?.ToString()"><option value="">dismiss…</option><option>won't fix</option><option>false positive</option><option>not applicable</option></select>
-                                <button disabled="@(string.IsNullOrEmpty(_reason.GetValueOrDefault(s2.Fingerprint)))" @onclick="() => Set(s2.Fingerprint, FindingStatus.Dismissed, _reason.GetValueOrDefault(s2.Fingerprint))">Dismiss</button>
+                                <select class="select" value="@(_reason.GetValueOrDefault(s2.Fingerprint) ?? "")" @onchange="e => _reason[s2.Fingerprint] = e.Value?.ToString()"><option value="">dismiss…</option><option>won't fix</option><option>false positive</option><option>not applicable</option></select>
+                                <button class="btn btn--secondary" disabled="@(string.IsNullOrEmpty(_reason.GetValueOrDefault(s2.Fingerprint)))" @onclick="() => Set(s2.Fingerprint, FindingStatus.Dismissed, _reason.GetValueOrDefault(s2.Fingerprint))">Dismiss</button>
                             }
-                            else { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.New, null)">Reopen</button> }
+                            else { <button class="btn btn--secondary" @onclick="() => Set(s2.Fingerprint, FindingStatus.New, null)">Reopen</button> }
                         }
                     </div></td>
                 </tr>
@@ -81,8 +81,8 @@ else
     </section>
 }
 
-<section class="panel" style="margin-top:1rem">
-    <header><h2>Audit history</h2></header>
+<section class="panel mt-4">
+    <header class="panel__head"><h2>Audit history</h2></header>
     <table class="t">
         <thead><tr><th>When</th><th>SHA</th><th>Status</th><th>Engine / model</th><th>Rubric</th><th>Trigger</th><th class="num">Duration</th><th>Transcript</th></tr></thead>
         <tbody>
@@ -90,8 +90,8 @@ else
         {
             <tr>
                 <td><Ago At="a.CreatedAt" /></td><td class="mono">@Dashboard.Web.Services.Fmt.ShortSha(a.Sha)</td>
-                <td><span class="badge @(a.Status == AuditStatus.Succeeded ? "ok" : a.Status == AuditStatus.Failed ? "bad" : "info")">@a.Status</span> @if (a.IsBaseline) { <span class="badge info">baseline</span> }</td>
-                <td>@a.Engine @a.Model</td><td>@a.RubricVersion</td><td class="muted">@a.Trigger</td>
+                <td><span class="pill pill--@(a.Status == AuditStatus.Succeeded ? "ok" : a.Status == AuditStatus.Failed ? "bad" : "info")">@a.Status</span> @if (a.IsBaseline) { <span class="pill pill--info">baseline</span> }</td>
+                <td>@a.Engine @a.Model</td><td>@a.RubricVersion</td><td class="tone-muted">@a.Trigger</td>
                 <td class="num">@(a.DurationMs is { } ms ? $"{ms / 1000.0:0}s" : "—")</td>
                 <td>@if (a.Status == AuditStatus.Succeeded) { <a href="audit/@a.Id/transcript" target="_blank">view</a> }</td>
             </tr>
@@ -143,9 +143,9 @@ else
 
     private static MarkupString ResultBadge(CheckResult r) => new(r switch
     {
-        CheckResult.Pass => "<span class='badge ok'>pass</span>",
-        CheckResult.Partial => "<span class='badge warn'>partial</span>",
-        CheckResult.Fail => "<span class='badge bad'>fail</span>",
-        _ => "<span class='badge'>n/a</span>",
+        CheckResult.Pass => "<span class='pill pill--ok'>pass</span>",
+        CheckResult.Partial => "<span class='pill pill--warn'>partial</span>",
+        CheckResult.Fail => "<span class='pill pill--bad'>fail</span>",
+        _ => "<span class='pill'>n/a</span>",
     });
 }

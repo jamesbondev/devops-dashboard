@@ -4,28 +4,31 @@
 
 <PageTitle>Health · DevOps Dashboard</PageTitle>
 
-<div class="row" style="margin-bottom:.5rem">
-    <h1 style="margin:0">Health</h1>
-    <span class="muted small">@_all.Count repos · window @Config.Current.Metrics.WindowDays days · tiers are cumulative gates; <b>*</b> = provisional (blocked only by insufficient data)</span>
-    <span class="grow"></span>
-    <a class="btn" href="export/health.md" target="_blank">Export Markdown</a>
-</div>
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>Health</h1>
+        <p class="page-head__headline">@_all.Count repos · window @Config.Current.Metrics.WindowDays days · tiers are cumulative gates; <b>*</b> = provisional (blocked only by insufficient data)</p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary" href="export/health.md" target="_blank">Export Markdown</a>
+    </div>
+</header>
 
-@if (LoadError is not null) { <div class="banner bad">@LoadError</div> }
+@if (LoadError is not null) { <div class="banner banner--bad">@LoadError</div> }
 
-<div class="kpis" style="margin-bottom:1rem">
+<div class="kpi-row mb-4">
     @foreach (var t in TierResult.Order.Reverse())
     {
-        <div class="kpi"><div class="label"><TierBadge Tier="@t" /></div><div class="value">@_all.Count(h => h.Tier.Tier == t)</div><div class="sub">@_all.Count(h => h.Tier.Tier == t && h.Tier.Provisional) provisional</div></div>
+        <div class="kpi"><div class="kpi__label"><TierBadge Tier="@t" /></div><div class="kpi__value">@_all.Count(h => h.Tier.Tier == t)</div><div class="kpi__sub">@_all.Count(h => h.Tier.Tier == t && h.Tier.Provisional) provisional</div></div>
     }
-    <div class="kpi"><div class="label">Main red now</div><div class="value @(_all.Any(h => h.OpenRed is not null && !h.IsTestRepo) ? "bad" : "good")">@_all.Count(h => h.OpenRed is not null && !h.IsTestRepo)</div>@if (_all.Count(h => h.OpenRed is not null && h.IsTestRepo) is > 0 and var tf) { <div class="sub">+@tf test repo@(tf == 1 ? "" : "s") failing</div> }</div>
-    <div class="kpi"><div class="label">Wasted minutes (flaky)</div><div class="value">@_all.Where(h => !h.IsTestRepo).Sum(h => h.WastedMinutes).ToString("0")</div><div class="sub">re-runs that later went green@(_all.Any(h => h.IsTestRepo) ? $" · test repos +{_all.Where(h => h.IsTestRepo).Sum(h => h.WastedMinutes):0}" : "")</div></div>
+    <div class="kpi"><div class="kpi__label">Main red now</div><div class="kpi__value @(_all.Any(h => h.OpenRed is not null && !h.IsTestRepo) ? "bad" : "good")">@_all.Count(h => h.OpenRed is not null && !h.IsTestRepo)</div>@if (_all.Count(h => h.OpenRed is not null && h.IsTestRepo) is > 0 and var tf) { <div class="kpi__sub">+@tf test repo@(tf == 1 ? "" : "s") failing</div> }</div>
+    <div class="kpi"><div class="kpi__label">Wasted minutes (flaky)</div><div class="kpi__value">@_all.Where(h => !h.IsTestRepo).Sum(h => h.WastedMinutes).ToString("0")</div><div class="kpi__sub">re-runs that later went green@(_all.Any(h => h.IsTestRepo) ? $" · test repos +{_all.Where(h => h.IsTestRepo).Sum(h => h.WastedMinutes):0}" : "")</div></div>
 </div>
 
 <div class="filters">
-    <input type="search" placeholder="Filter repos…" @bind="_filter" @bind:event="oninput" />
-    <label>Type <select @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select></label>
-    <label>Tier <select @bind="_tier"><option value="">all</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>None</option></select></label>
+    <input type="search" class="input" placeholder="Filter repos…" @bind="_filter" @bind:event="oninput" />
+    <label>Type <select class="select" @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select></label>
+    <label>Tier <select class="select" @bind="_tier"><option value="">all</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>None</option></select></label>
     <label><input type="checkbox" @bind="_changed" /> changed this week</label>
     <label><input type="checkbox" @bind="_redOnly" /> red now</label>
     <label><input type="checkbox" @bind="_showMuted" /> show muted</label>
@@ -34,7 +37,7 @@
 
 @if (!_tiles)
 {
-<div class="table-wrap panel" style="padding:0">
+<div class="table-wrap panel p-0">
 <table class="t">
     <thead>
         <tr>
@@ -57,20 +60,20 @@
     @foreach (var h in Rows)
     {
         <tr>
-            <td><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a> <span class="muted small">@RepoTypes.Label(h.Type)</span>
-                @if (h.Dormant) { <span class="badge">dormant</span> } @if (h.Repo.Muted) { <span class="badge">muted</span> } @if (h.Repo.Pinned) { <span title="pinned">📌</span> }
-                <div>@foreach (var c in h.Components) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")" style="margin-right:.2rem">@c.Name</span> }</div></td>
+            <td><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a> <span class="tone-muted text-sm">@RepoTypes.Label(h.Type)</span>
+                @if (h.Dormant) { <span class="pill">dormant</span> } @if (h.Repo.Muted) { <span class="pill">muted</span> } @if (h.Repo.Pinned) { <span class="pill pill--info">pinned</span> }
+                <div class="chip-list mt-1">@foreach (var c in h.Components) { <ComponentChip Name="@c.Name" Kind="c.Kind" /> }</div></td>
             <td class="nowrap"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /> @TierMove(h)</td>
-            <td class="gap">@if (h.Tier.NextTier is { } nt) { <span title="@string.Join("\n", h.Tier.NextTierGaps.Select(g => $"{g.RuleId} {g.Title}: {g.Display} ({g.Status})"))">@nt: @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") — @string.Join(", ", h.Tier.NextTierGaps.Take(2).Select(g => g.RuleId))</span> } else { <span class="good">top tier</span> }</td>
-            <td class="num">@if (h.OpenRed is { } red) { <span class="badge bad">red @Fmt.Hours((Now - red.Start).TotalHours)</span> } else { <span class="good">●</span> }</td>
-            <td class="num @(h.MainSuccessRate < 0.9 && !h.IsTestRepo ? "bad" : "")" title="@(h.IsTestRepo ? "Test pass rate on main (test repo)" : "")">@Fmt.Pct(h.MainSuccessRate) <span class="muted small">n=@h.CompletedBuildRuns</span></td>
+            <td class="gap">@if (h.Tier.NextTier is { } nt) { <span title="@string.Join("\n", h.Tier.NextTierGaps.Select(g => $"{g.RuleId} {g.Title}: {g.Display} ({g.Status})"))">@nt: @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") — @string.Join(", ", h.Tier.NextTierGaps.Take(2).Select(g => g.RuleId))</span> } else { <span class="tone-ok">top tier</span> }</td>
+            <td class="num">@if (h.OpenRed is { } red) { <span class="pill pill--bad">red @Fmt.Hours((Now - red.Start).TotalHours)</span> } else { <span class="tone-ok">●</span> }</td>
+            <td class="num @(h.MainSuccessRate < 0.9 && !h.IsTestRepo ? "bad" : "")" title="@(h.IsTestRepo ? "Test pass rate on main (test repo)" : "")">@Fmt.Pct(h.MainSuccessRate) <span class="tone-muted text-sm">n=@h.CompletedBuildRuns</span></td>
             <td class="num @(h.FlakyRunRate >= 0.05 ? "warnc" : "")">@Fmt.Pct1(h.FlakyRunRate)</td>
             <td class="num">@h.WastedMinutes.ToString("0")</td>
-            <td class="num">@(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—") <span class="muted small">@h.Prs.FirstReviewLabel n=@h.Prs.ReviewedInWindow</span></td>
+            <td class="num">@(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—") <span class="tone-muted text-sm">@h.Prs.FirstReviewLabel n=@h.Prs.ReviewedInWindow</span></td>
             <td class="num @(h.Prs.OldestActiveWorkingDays > 5 ? "warnc" : "")">@(h.Prs.OldestActiveWorkingDays is { } od ? $"{od:0.#}d" : "—")</td>
-            <td>@if (h.LastProductionDeploy is { } lp) { <Ago At="lp.FinishTime" /> <span class="muted small">@lp.EnvironmentName</span> } else { <span class="muted">never</span> }</td>
+            <td>@if (h.LastProductionDeploy is { } lp) { <Ago At="lp.FinishTime" /> <span class="tone-muted text-sm">@lp.EnvironmentName</span> } else { <span class="tone-muted">never</span> }</td>
             <td>@TemplateSummary(h)</td>
-            <td>@if (h.LatestAudit is { } a) { <Ago At="a.CompletedAt" /> @if (h.OpenFindings > 0) { <span class="badge warn">@h.OpenFindings open</span> } } else { <span class="muted">—</span> }</td>
+            <td>@if (h.LatestAudit is { } a) { <Ago At="a.CompletedAt" /> @if (h.OpenFindings > 0) { <span class="pill pill--warn">@h.OpenFindings open</span> } } else { <span class="tone-muted">—</span> }</td>
             <td><Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Label="weekly main success rate" /></td>
         </tr>
     }
@@ -84,10 +87,10 @@ else
     @foreach (var h in Rows)
     {
         <div class="panel">
-            <header><h2><a href="repo/@Uri.EscapeDataString(h.Repo.Name)">@h.Repo.Name</a></h2><span class="meta"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /></span></header>
-            <div class="row small">
+            <header><h2><a href="repo/@Uri.EscapeDataString(h.Repo.Name)">@h.Repo.Name</a></h2><span class="panel__meta"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /></span></header>
+            <div class="row text-sm">
                 <span>Main @Fmt.Pct(h.MainSuccessRate)</span><span>Flaky @Fmt.Pct1(h.FlakyRunRate)</span><span>1st review @(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—")</span>
-                @if (h.OpenRed is not null) { <span class="badge bad">red</span> }
+                @if (h.OpenRed is not null) { <span class="pill pill--bad">red</span> }
             </div>
             <Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Width="260" />
         </div>
@@ -136,21 +139,21 @@ else
     {
         if (h.PreviousTier is null || h.PreviousTier == h.Tier.Tier) return new("");
         var up = Array.IndexOf(TierResult.Order, h.Tier.Tier) > Array.IndexOf(TierResult.Order, h.PreviousTier);
-        return new(up ? $"<span class='good' title='was {h.PreviousTier} 4 weeks ago'>▲</span>" : $"<span class='bad' title='was {h.PreviousTier} 4 weeks ago'>▼</span>");
+        return new(up ? $"<span class='tone-ok' title='was {h.PreviousTier} 4 weeks ago'>▲</span>" : $"<span class='tone-bad' title='was {h.PreviousTier} 4 weeks ago'>▼</span>");
     }
 
     private static MarkupString TemplateSummary(RepoHealth h)
     {
-        if (h.Templates.Count == 0) return new("<span class='muted'>—</span>");
+        if (h.Templates.Count == 0) return new("<span class='tone-muted'>—</span>");
         var non = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.NonCompliant);
         var exp = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.Experimental);
         var none = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.NoTemplate);
         var stale = h.Templates.Count(t => t.Stale);
         var parts = new List<string>();
-        if (non > 0) parts.Add($"<span class='badge bad'>{non} off-branch</span>");
-        if (none > 0) parts.Add($"<span class='badge bad'>{none} no templates</span>");
-        if (exp > 0) parts.Add($"<span class='badge info'>{exp} next</span>");
-        if (stale > 0) parts.Add($"<span class='badge warn' title='last run used an older template commit than the branch head'>{stale} stale</span>");
-        return new(parts.Count == 0 ? "<span class='badge ok'>main</span>" : string.Join(" ", parts));
+        if (non > 0) parts.Add($"<span class='pill pill--bad'>{non} off-branch</span>");
+        if (none > 0) parts.Add($"<span class='pill pill--bad'>{none} no templates</span>");
+        if (exp > 0) parts.Add($"<span class='pill pill--info'>{exp} next</span>");
+        if (stale > 0) parts.Add($"<span class='pill pill--warn' title='last run used an older template commit than the branch head'>{stale} stale</span>");
+        return new(parts.Count == 0 ? "<span class='pill pill--ok'>main</span>" : string.Join(" ", parts));
     }
 }

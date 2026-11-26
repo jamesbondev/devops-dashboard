@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -10,9 +10,9 @@
 
 <div class="shell">
     <header class="topbar">
-        <div class="brand">DevOps Dashboard @if (_status?.Mock == true) { <span class="mode" title="Synthetic data — set azureDevOps.mode: live and ADO_PAT to use real data">MOCK DATA</span> }</div>
+        <div class="brand">DevOps Dashboard @if (_status?.Mock == true) { <span class="pill pill--warn" title="Synthetic data — set azureDevOps.mode: live and ADO_PAT to use real data">MOCK DATA</span> }</div>
         <nav class="nav">
-            <NavLink href="" Match="NavLinkMatch.All">Now @if (_attention > 0) { <span class="count">@_attention</span> }</NavLink>
+            <NavLink href="" Match="NavLinkMatch.All">Now @if (_attention > 0) { <span class="pill pill--count pill--bad">@_attention</span> }</NavLink>
             <NavLink href="repos">Health</NavLink>
             <NavLink href="gates">Gates</NavLink>
             <NavLink href="findings">Findings</NavLink>
@@ -26,28 +26,28 @@
             <datalist id="repo-list">
                 @foreach (var r in _status?.RepoNames ?? []) { <option value="@r" /> }
             </datalist>
-            <span class="small muted nowrap" title="@FreshnessTitle">
-                @if (Signals.Running is { } running) { <span class="dot info pulse"></span> <span>syncing @running…</span> }
-                else if (_status?.LastHot is { } hot) { <span class="dot @(Clock.UtcNow - hot > TimeSpan.FromMinutes(5) ? "warn" : "ok")"></span> <span>synced <Ago At="hot" /></span> }
+            <span class="text-sm tone-muted nowrap" title="@FreshnessTitle">
+                @if (Signals.Running is { } running) { <span class="dot dot--info pulse"></span> <span>syncing @running…</span> }
+                else if (_status?.LastHot is { } hot) { <span class="dot dot--@(Clock.UtcNow - hot > TimeSpan.FromMinutes(5) ? "warn" : "ok")"></span> <span>synced <Ago At="hot" /></span> }
                 else { <span class="dot"></span> <span>not synced yet</span> }
             </span>
-            <button title="Presentation mode (large font, hides names)" @onclick="TogglePresent">@(_present ? "⤡" : "⤢")</button>
+            <button class="btn btn--secondary" title="Presentation mode (large font, hides names)" @onclick="TogglePresent">@(_present ? "⤡" : "⤢")</button>
         </div>
     </header>
     <main class="content">
         @if (_status is { } s)
         {
-            @if (s.AuthFailed) { <div class="banner bad">Azure DevOps rejected the PAT (expired, revoked or wrong organisation). Update <code>ADO_PAT</code> in <code>.env</code> and restart. <a href="settings">Setup</a></div> }
-            else if (s.MissingPat) { <div class="banner bad">Live mode is on but <code>ADO_PAT</code> is not set. Add it to <code>.env</code> and restart, or set <code>azureDevOps.mode: mock</code>.</div> }
-            @if (s.Throttled) { <div class="banner warn">Azure DevOps is throttling requests (TSTU budget). Sync is backing off; your own ADO browsing may feel slow.</div> }
-            @if (s.ConfigErrors.Count > 0) { <div class="banner warn">Config reload rejected: @string.Join("; ", s.ConfigErrors) — still using the last valid config. <a href="settings">Settings</a></div> }
+            @if (s.AuthFailed) { <div class="banner banner--bad">Azure DevOps rejected the PAT (expired, revoked or wrong organisation). Update <code>ADO_PAT</code> in <code>.env</code> and restart. <a href="settings">Setup</a></div> }
+            else if (s.MissingPat) { <div class="banner banner--bad">Live mode is on but <code>ADO_PAT</code> is not set. Add it to <code>.env</code> and restart, or set <code>azureDevOps.mode: mock</code>.</div> }
+            @if (s.Throttled) { <div class="banner banner--warn">Azure DevOps is throttling requests (TSTU budget). Sync is backing off; your own ADO browsing may feel slow.</div> }
+            @if (s.ConfigErrors.Count > 0) { <div class="banner banner--warn">Config reload rejected: @string.Join("; ", s.ConfigErrors) — still using the last valid config. <a href="settings">Settings</a></div> }
         }
         @Body
     </main>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred. <a href="." class="reload">Reload</a> <span class="dismiss">🗙</span>
+    An unhandled error has occurred. <a href="." class="reload">Reload</a> <span class="dismiss">✕</span>
 </div>
 
 @code {

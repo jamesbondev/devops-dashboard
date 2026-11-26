@@ -4,33 +4,36 @@
 @inject IJSRuntime JS
 
 <PageTitle>Findings · DevOps Dashboard</PageTitle>
-<div class="row" style="margin-bottom:.5rem">
-    <h1 style="margin:0">Audit findings</h1>
-    <span class="muted small">tracked across audits by fingerprint (check + component + path); Done is set automatically when a finding disappears</span>
-    <span class="grow"></span>
-    <button @onclick="Copy">Copy Markdown</button>
-    <a class="btn" href="export/findings.md" target="_blank">Export .md</a>
-</div>
-@if (_copied) { <div class="banner info">Copied to clipboard.</div> }
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>Audit findings</h1>
+        <p class="page-head__headline">tracked across audits by fingerprint (check + component + path); Done is set automatically when a finding disappears</p>
+    </div>
+    <div class="page-head__actions">
+        <button class="btn btn--secondary" @onclick="Copy">Copy Markdown</button>
+    <a class="btn btn--secondary" href="export/findings.md" target="_blank">Export .md</a>
+    </div>
+</header>
+@if (_copied) { <div class="banner">Copied to clipboard.</div> }
 
-<section class="panel" style="margin-bottom:1rem">
-    <header><h2>Themes across repos</h2><Info Text="Open findings grouped by check — plan work around themes rather than individual findings." /></header>
+<section class="panel mb-4">
+    <header class="panel__head"><h2>Themes across repos</h2><Info Text="Open findings grouped by check — plan work around themes rather than individual findings." /></header>
     @if (_themes.Count == 0) { <div class="empty">No open findings.</div> }
     <table class="t"><thead><tr><th>Check</th><th>Title</th><th>Severity</th><th class="num">Repos</th><th>Repos affected</th></tr></thead><tbody>
     @foreach (var t in _themes)
     {
-        <tr><td><code>@t.CheckId</code></td><td>@t.Title</td><td><span class="badge @(t.Severity == "high" ? "bad" : t.Severity == "medium" ? "warn" : "")">@t.Severity</span></td><td class="num">@t.Repos</td>
-            <td class="small">@foreach (var r in t.RepoNames) { <a href="repo/@Uri.EscapeDataString(r)?tab=audit" style="margin-right:.4rem">@r</a> }</td></tr>
+        <tr><td><code>@t.CheckId</code></td><td>@t.Title</td><td><span class="pill pill--@(t.Severity == "high" ? "bad" : t.Severity == "medium" ? "warn" : "")">@t.Severity</span></td><td class="num">@t.Repos</td>
+            <td class="text-sm row">@foreach (var r in t.RepoNames) { <a href="repo/@Uri.EscapeDataString(r)?tab=audit">@r</a> }</td></tr>
     }
     </tbody></table>
 </section>
 
 <section class="panel">
-    <header><h2>Backlog</h2>
-        <span class="meta filters" style="margin:0">
-            <label>Status <select @bind="_status"><option value="open">open (new + accepted)</option><option value="">all</option><option>New</option><option>Accepted</option><option>Dismissed</option><option>Done</option></select></label>
-            <label>Severity <select @bind="_severity"><option value="">all</option><option>high</option><option>medium</option><option>low</option></select></label>
-            <input type="search" placeholder="repo or check…" @bind="_q" @bind:event="oninput" />
+    <header class="panel__head"><h2>Backlog</h2>
+        <span class="panel__meta filters mb-0">
+            <label>Status <select class="select" @bind="_status"><option value="open">open (new + accepted)</option><option value="">all</option><option>New</option><option>Accepted</option><option>Dismissed</option><option>Done</option></select></label>
+            <label>Severity <select class="select" @bind="_severity"><option value="">all</option><option>high</option><option>medium</option><option>low</option></select></label>
+            <input type="search" class="input" placeholder="repo or check…" @bind="_q" @bind:event="oninput" />
         </span>
     </header>
     <table class="t">
@@ -41,9 +44,9 @@
             <tr>
                 <td><a href="repo/@Uri.EscapeDataString(r.RepoName)?tab=audit">@r.RepoName</a></td>
                 <td><code>@r.State.CheckId</code></td>
-                <td><span class="badge @(r.State.Severity == "high" ? "bad" : r.State.Severity == "medium" ? "warn" : "")">@r.State.Severity</span></td>
-                <td class="small">@(r.Latest?.Explanation ?? "")</td>
-                <td><span class="badge" title="@r.State.Reason">@r.State.Status</span></td>
+                <td><span class="pill pill--@(r.State.Severity == "high" ? "bad" : r.State.Severity == "medium" ? "warn" : "")">@r.State.Severity</span></td>
+                <td class="text-sm">@(r.Latest?.Explanation ?? "")</td>
+                <td><span class="pill" title="@r.State.Reason">@r.State.Status</span></td>
                 <td><Ago At="r.State.FirstSeen" /></td>
             </tr>
         }

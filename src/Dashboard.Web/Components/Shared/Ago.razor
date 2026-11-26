@@ -1,7 +1,7 @@
 @inject IClock Clock
-@if (At is { } t) { <span class="nowrap" title="@Local(t)">@Fmt.Ago(t, Clock.UtcNow)</span> } else { <span class="muted">—</span> }
+@if (At is { } t) { <time class="ago" datetime="@t.ToString("o")" title="@Local(t)">@Fmt.Ago(t, Clock.UtcNow)</time> } else { <span class="tone-subtle">—</span> }
 @code {
     [Parameter] public DateTimeOffset? At { get; set; }
     [Inject] ConfigService Config { get; set; } = default!;
-    private string Local(DateTimeOffset t) => Config.WorkingHours.ToLocal(t).ToString("ddd dd MMM yyyy HH:mm");
+    private string Local(DateTimeOffset t) => Config.WorkingHours.ToLocal(t).ToString("ddd dd MMM yyyy HH:mm") + " (local)";
 }

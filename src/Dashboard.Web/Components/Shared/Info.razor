@@ -1,2 +1,6 @@
-<span class="info" title="@Text">ⓘ</span>
-@code { [Parameter] public string Text { get; set; } = ""; }
+<span class="info-tip" tabindex="0" role="note" aria-label="@Text">?<span class="info-tip__body">@Text@if (Term is not null) { <a class="info-tip__more" href="admin#g-@Term">Glossary: @Term ↗</a> }</span></span>
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    /// <summary>Optional glossary anchor (see Shared/Glossary.razor).</summary>
+    [Parameter] public string? Term { get; set; }
+}

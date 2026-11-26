@@ -1,4 +1,4 @@
-<span class="tier @Tier" title="@Tooltip">@Tier@if (Provisional) {<span class="prov">*</span>}</span>
+<span class="pill pill--@Tier.ToLowerInvariant()" title="@Tooltip">@Tier@if (Provisional) {<span class="pill__sub">*</span>}</span>
 @code {
     [Parameter] public string Tier { get; set; } = "None";
     [Parameter] public bool Provisional { get; set; }
