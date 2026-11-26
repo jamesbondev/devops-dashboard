@@ -18,6 +18,42 @@ public static class Endpoints
                       : Results.Problem("database unavailable");
         });
 
+        // Diagnostics: deployments derived for a repo, and how each recent run's stages map to environments.
+        app.MapGet("/debug/deploys/{name}", async (string name, DashboardDbContext db, ConfigService config, NowService now, CancellationToken ct) =>
+        {
+            var cfg = config.Current;
+            var repo = await db.Repos.AsNoTracking().FirstOrDefaultAsync(r => r.Name == name, ct);
+            if (repo is null) return Results.NotFound($"no repo '{name}'");
+            var sb = new StringBuilder();
+            var deps = await db.Deployments.AsNoTracking().Where(d => d.RepoId == repo.Id).OrderByDescending(d => d.StartTime).ToListAsync(ct);
+            var comps = await db.Components.AsNoTracking().Where(c => c.RepoId == repo.Id).ToListAsync(ct);
+            sb.AppendLine($"repo {repo.Name} muted={repo.Muted} assigned={repo.Assigned}  components: {string.Join(", ", comps.Select(c => $"{c.Id}:{c.Name}({c.Kind}{(c.Hidden ? ",hidden" : "")})"))}");
+            sb.AppendLine($"configured envs: {string.Join(", ", cfg.Environments.OrderBy(e => e.Order).Select(e => e.Name))}");
+            sb.AppendLine($"stored deployments: {deps.Count}; by env: {string.Join(", ", deps.GroupBy(d => d.EnvironmentName).Select(g => $"{g.Key}={g.Count()}"))}");
+            foreach (var d in deps.Take(15))
+                sb.AppendLine($"  run {d.RunId} {d.EnvironmentName} comp={d.ComponentId?.ToString() ?? "-"} stage='{d.StageName}' state={d.State} result={d.Result} start={d.StartTime:u} finish={d.FinishTime:u} v={d.Version}");
+            try
+            {
+                var model = await now.BuildAsync(null);
+                foreach (var row in model.Matrix.Where(r => r.RepoId == repo.Id))
+                    sb.AppendLine($"matrix row comp={row.Component?.Name ?? "-"}: " + string.Join(" | ", row.Cells.Select(c => $"{c.Key}={(c.Value.Latest?.Version ?? (c.Value.InProgress is null ? "—" : "running"))}")));
+                if (!model.Matrix.Any(r => r.RepoId == repo.Id)) sb.AppendLine("matrix: no row for this repo");
+            }
+            catch (Exception ex) { sb.AppendLine($"matrix build failed: {ex.GetType().Name}: {ex.Message}"); }
+            sb.AppendLine();
+            var pipelines = await db.Pipelines.AsNoTracking().Where(p => p.RepoId == repo.Id).ToDictionaryAsync(p => p.Id, ct);
+            var runs = await db.Runs.AsNoTracking().Where(r => r.RepoId == repo.Id && r.Reason != "pullRequest").OrderByDescending(r => r.QueueTime).Take(40).ToListAsync(ct);
+            foreach (var r in runs.Where(r => pipelines.TryGetValue(r.PipelineId, out var p) && Core.Metrics.StageClassifier.AnyMatch(cfg.Pipelines.ReleaseNamePatterns, p.Name)).Take(8)
+                         .DefaultIfEmpty().Where(r => r is not null).Concat(runs.Take(3)).DistinctBy(r => r!.Id))
+            {
+                var recs = await db.TimelineRecords.AsNoTracking().Where(t => t.RunId == r!.Id && t.Type == "Stage").OrderBy(t => t.Order).ToListAsync(ct);
+                sb.AppendLine($"run {r!.Id} {pipelines.GetValueOrDefault(r.PipelineId)?.Name} #{r.BuildNumber} {r.QueueTime:u} {r.Status}/{r.Result} stages={recs.Count} deps={deps.Count(d => d.RunId == r.Id)}");
+                foreach (var t in recs.Where(t => !t.IsPreviousAttempt))
+                    sb.AppendLine($"    '{t.Name}' id={t.Identifier} state={t.State} result={t.Result} → {Core.Metrics.StageClassifier.MatchEnvironment(t.Name, t.Identifier, cfg.Environments)?.Name ?? "(no env)"}");
+            }
+            return Results.Text(sb.ToString(), "text/plain; charset=utf-8");
+        });
+
         // Diagnostics: a "running" run as stored vs. what ADO returns now (explains stuck Running & queued rows).
         app.MapGet("/debug/running", async (DashboardDbContext db, Ado.IAdoClient ado, CancellationToken ct) =>
         {

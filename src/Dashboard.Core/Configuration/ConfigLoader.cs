@@ -137,13 +137,13 @@ public static class Defaults
     /// </summary>
     public static List<EnvironmentConfig> Environments() =>
     [
-        new() { Name = "team", Tier = EnvironmentTier.Team, StagePatterns = [@"^test[a-z0-9]+[ _-]?deploy$"], Order = 0 },
-        new() { Name = "staging-green", Tier = EnvironmentTier.Staging, Region = "green", StagePatterns = [@"^staging[ _-]?green[ _-]?deploy$"], Order = 1 },
-        new() { Name = "staging-eu", Tier = EnvironmentTier.Staging, Region = "eu", StagePatterns = [@"^staging[ _-]?eu[ _-]?deploy$"], Order = 2 },
-        new() { Name = "sim-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^sim[ _-]?green[ _-]?deploy$"], Order = 3 },
-        new() { Name = "sim-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^sim[ _-]?eu[ _-]?deploy$"], Order = 4 },
-        new() { Name = "prod-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^prod[ _-]?green[ _-]?deploy$"], Order = 5 },
-        new() { Name = "prod-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^prod[ _-]?eu[ _-]?deploy$"], Order = 6 },
+        new() { Name = "team", Tier = EnvironmentTier.Team, StagePatterns = [@"^test[a-z0-9]+[ _-]?(deploy|apply)$"], Order = 0 },
+        new() { Name = "staging-green", Tier = EnvironmentTier.Staging, Region = "green", StagePatterns = [@"^staging[ _-]?green[ _-]?(deploy|apply)$"], Order = 1 },
+        new() { Name = "staging-eu", Tier = EnvironmentTier.Staging, Region = "eu", StagePatterns = [@"^staging[ _-]?eu[ _-]?(deploy|apply)$"], Order = 2 },
+        new() { Name = "sim-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^sim[ _-]?green[ _-]?(deploy|apply)$"], Order = 3 },
+        new() { Name = "sim-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^sim[ _-]?eu[ _-]?(deploy|apply)$"], Order = 4 },
+        new() { Name = "prod-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^prod[ _-]?green[ _-]?(deploy|apply)$"], Order = 5 },
+        new() { Name = "prod-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^prod[ _-]?eu[ _-]?(deploy|apply)$"], Order = 6 },
     ];
 
     public static List<RuleConfig> Rules() =>

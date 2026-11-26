@@ -19,13 +19,13 @@ time:
 # accounts, drogon, fox2, oce, pthr …) and "{staging|sim|prod}{green|eu} deploy" (green = UK).
 # sim and prod are both Production tier. Drift is only compared within a region (a release may go to one region).
 environments:
-  - { name: team,          tier: Team,       order: 0,                 stagePatterns: ['^test[a-z0-9]+[ _-]?deploy$'] }
-  - { name: staging-green, tier: Staging,    order: 1, region: green,  stagePatterns: ['^staging[ _-]?green[ _-]?deploy$'] }
-  - { name: staging-eu,    tier: Staging,    order: 2, region: eu,     stagePatterns: ['^staging[ _-]?eu[ _-]?deploy$'] }
-  - { name: sim-green,     tier: Production, order: 3, region: green,  stagePatterns: ['^sim[ _-]?green[ _-]?deploy$'] }
-  - { name: sim-eu,        tier: Production, order: 4, region: eu,     stagePatterns: ['^sim[ _-]?eu[ _-]?deploy$'] }
-  - { name: prod-green,    tier: Production, order: 5, region: green,  stagePatterns: ['^prod[ _-]?green[ _-]?deploy$'] }
-  - { name: prod-eu,       tier: Production, order: 6, region: eu,     stagePatterns: ['^prod[ _-]?eu[ _-]?deploy$'] }
+  - { name: team,          tier: Team,       order: 0,                 stagePatterns: ['^test[a-z0-9]+[ _-]?(deploy|apply)$'] }
+  - { name: staging-green, tier: Staging,    order: 1, region: green,  stagePatterns: ['^staging[ _-]?green[ _-]?(deploy|apply)$'] }
+  - { name: staging-eu,    tier: Staging,    order: 2, region: eu,     stagePatterns: ['^staging[ _-]?eu[ _-]?(deploy|apply)$'] }
+  - { name: sim-green,     tier: Production, order: 3, region: green,  stagePatterns: ['^sim[ _-]?green[ _-]?(deploy|apply)$'] }
+  - { name: sim-eu,        tier: Production, order: 4, region: eu,     stagePatterns: ['^sim[ _-]?eu[ _-]?(deploy|apply)$'] }
+  - { name: prod-green,    tier: Production, order: 5, region: green,  stagePatterns: ['^prod[ _-]?green[ _-]?(deploy|apply)$'] }
+  - { name: prod-eu,       tier: Production, order: 6, region: eu,     stagePatterns: ['^prod[ _-]?eu[ _-]?(deploy|apply)$'] }
   # Optional: add adoId (from .../_environments/<id>) to read an environment's Approvals & checks for the Gates page.
 defaultEnvironmentTier: Team
 

@@ -16,4 +16,10 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Dashboard.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Local dev runs clone mock repos here; never compile them. -->
+    <Compile Remove="Data/clones/**" />
+    <Content Remove="Data/clones/**" />
+    <None Remove="Data/clones/**" />
+  </ItemGroup>
 </Project>
