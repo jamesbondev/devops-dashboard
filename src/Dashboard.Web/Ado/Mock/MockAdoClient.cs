@@ -198,6 +198,12 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
                 C("05", "Approval", "Approval Gate 2 escalation", MockWorld.GateApproversGroupName, settings: gate),
             ],
             var e when e.StartsWith("staging", StringComparison.Ordinal) => [C("01", "Task Check", "Business hours (deployment window)")],
+            var e when e.Contains("approval gate", StringComparison.OrdinalIgnoreCase) =>
+            [
+                C("01", "Approval", "All approvers must approve", MockWorld.GateApproversGroupName, settings: gate),
+                C("02", "Task Check", "Release Minder"),
+                C("03", "Task Check", "Release Governance API"),
+            ],
             _ => [],
         };
         return Task.FromResult(Call(list));

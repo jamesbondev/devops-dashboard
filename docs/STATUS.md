@@ -79,7 +79,7 @@ Every phase in [plan.md](plan.md) is implemented and tested against **mock** Azu
   How the dashboard uses them:
   - Pending checks are read from the timeline's `Checkpoint.*` records.
   - When a check matching `pipelines.manualReviewCheckPatterns` (Release Minder) is pending, Now shows "Release Minder review needed" with a **YOU** badge; it never appears in the approvals API.
-  - Set `pipelines.gateEnvironments` (name + adoId) to list the gate's checks on the Gates page.
+  - `pipelines.gateEnvironments` is set to "Automated Approval Gate 2" (id 186), so its three checks show on the Gates page.
 - **Components:** `skaffold_deploy` → the repo's AKS components; `dacpac_apply` → its database. `pre_apply`, `terraform_*` and `mssql_managed_identity_deploy` are infrastructure.
 - **Templates:** `cbi/cbi-yaml-templates`, alias `templates`, branches `main`/`next`.
 - **Bots:** clearcoder, product-health and "Build Service" accounts are excluded from PR metrics.

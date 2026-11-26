@@ -37,8 +37,8 @@ pipelines:
   gateBlockedMinutes: 10                       # show "release waiting at gate" on Now after this long
   # The environment the Approval Gate 2 deployment job targets (its checks hold the release). Name + id from
   # Pipelines → Environments → <env> (URL …/_environments/<id>). Its Approvals & checks show on the Gates page.
-  gateEnvironments: []
-  #  - { name: "Automated Approval Gate 2", adoId: <id from …/_environments/<id>> }
+  gateEnvironments:
+    - { name: "Automated Approval Gate 2", adoId: 186 }
   # Gate checks that usually need you (timeline check names). A pending one shows on Now as "review needed" (YOU).
   manualReviewCheckPatterns: ['release minder']
 
