@@ -1,17 +1,11 @@
-@page "/findings"
 @inherits LivePage
 @inject FindingsService FindingsSvc
 
-<PageTitle>Findings · DevOps Dashboard</PageTitle>
-<header class="page-head">
-    <div class="page-head__text">
-        <h1>Audit findings</h1>
-        <p class="page-head__headline"><strong>@_rows.Count(r => r.State.Status is FindingStatus.New or FindingStatus.Accepted) open</strong> across @_themes.Count theme@(_themes.Count == 1 ? "" : "s") · tracked across audits by fingerprint (check + component + path); Done is set automatically when a finding disappears <Info Text="New = first seen, not triaged. Accepted = agreed, to do. Dismissed = won't fix / false positive / not applicable. Done = no longer reported by the latest audit." Term="finding-status" /></p>
-    </div>
-    <div class="page-head__actions">
-        <a class="btn btn--secondary btn--sm" href="export/findings.md" target="_blank">Export .md</a>
-    </div>
-</header>
+<div class="row mb-3">
+    <h2 class="m-0">Audit findings</h2>
+    <span class="tone-muted text-sm grow"><strong>@_rows.Count(r => r.State.Status is FindingStatus.New or FindingStatus.Accepted) open</strong> across @_themes.Count theme@(_themes.Count == 1 ? "" : "s") · tracked by fingerprint (check + component + path); Done is set automatically when a finding disappears <Info Text="New = first seen, not triaged. Accepted = agreed, to do. Dismissed = won't fix / false positive / not applicable. Done = no longer reported by the latest audit." Term="finding-status" /></span>
+    <a class="btn btn--secondary btn--sm" href="export/findings.md" target="_blank">Export .md</a>
+</div>
 
 <section class="panel mb-4 @(_themes.Count == 0 ? "is-empty" : "")" data-empty="No open findings">
     <header class="panel__head"><h2>Themes across repos</h2><Info Text="Open findings grouped by check — plan work around themes rather than individual findings." /></header>

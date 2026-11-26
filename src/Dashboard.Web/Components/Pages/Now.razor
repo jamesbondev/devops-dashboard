@@ -15,6 +15,9 @@
             <p class="page-head__headline"><strong class="@(red > 0 ? "tone-bad" : "")">@red repo@(red == 1 ? "" : "s")</strong> with main red · @mine approval@(mine == 1 ? "" : "s") waiting · @hm.Running.Count running · as of <Ago At="hm.GeneratedAt" /></p>
         }
     </div>
+    <div class="page-head__actions">
+        <a class="btn btn--secondary btn--sm" href="weekly">Export weekly digest</a>
+    </div>
 </header>
 
 @if (LoadError is not null) { <div class="banner banner--bad">@LoadError</div> }
@@ -61,6 +64,7 @@ else if (_model is { } m)
                     </ul>
                     @if (m.Attention.Count > 25 && !_showAll) { <button class="btn btn--secondary btn--sm mt-2" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
                 </section>
+                <PendingApprovals />
                 break;
             case "matrix":
                 <section class="panel">

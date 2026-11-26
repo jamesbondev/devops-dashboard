@@ -1,24 +1,10 @@
-@page "/gates"
 @inherits LivePage
 @inject IServiceScopeFactory Scopes
 @using Microsoft.EntityFrameworkCore
 @using Dashboard.Web.Data
 
-<PageTitle>Gates · DevOps Dashboard</PageTitle>
-<header class="page-head"><div class="page-head__text"><h1>Approvals &amp; gates</h1></div></header>
 
 <div class="grid-2">
-    <section class="panel">
-        <header class="panel__head"><h2>Waiting for you</h2><span class="pill pill--@(_mine.Count > 0 ? "warn" : "ok")">@_mine.Count</span></header>
-        @if (_mine.Count == 0) { <div class="empty">No approvals waiting for you.</div> }
-        <table class="t"><tbody>
-        @foreach (var a in _mine)
-        {
-            <tr><td><b>@RepoName(a.RepoId)</b> → @a.EnvironmentName<div class="text-sm tone-muted">@a.StageName · @(a.EscalationReason ?? a.Instructions)</div></td><td><Ago At="a.CreatedOn" /></td><td><AdoLink Href="@a.WebUrl">approve in ADO ↗</AdoLink></td></tr>
-        }
-        </tbody></table>
-    </section>
-
     <section class="panel">
         <header class="panel__head"><h2>Gates that can escalate to you</h2><Info Text="Environment check configurations (read daily). An approval check naming you or one of your groups means that environment can need your approval. Environments need adoId in config for live mode." /></header>
         @if (_checks.Count == 0) { <div class="empty">No check configurations read. Set <code>adoId</code> on environments in config/dashboard.yaml.</div> }
@@ -33,7 +19,7 @@
     </section>
 
     <section class="panel">
-        <header class="panel__head"><h2>Escalations to you (30 days)</h2><Info Text="Approvals that were assigned to you, by pipeline — the observed view of which pipelines need your approval." /></header>
+        <header class="panel__head"><h2>Escalations to you <span class="kpi__window">30 d</span></h2><Info Text="Approvals that were assigned to you, by pipeline — the observed view of which pipelines need your approval." /></header>
         @if (_history.Count == 0) { <div class="empty">None observed yet (history builds up as approvals are synced).</div> }
         <table class="t"><thead><tr><th>Repo</th><th>Environment</th><th class="num">Times</th><th>Typical reason</th><th>Last</th></tr></thead><tbody>
         @foreach (var g in _history.GroupBy(a => (a.RepoId, a.EnvironmentName)).OrderByDescending(g => g.Count()))
@@ -44,15 +30,6 @@
         </tbody></table>
     </section>
 
-    <section class="panel">
-        <header class="panel__head"><h2>All pending approvals</h2><span class="pill">@_pending.Count</span></header>
-        <table class="t"><tbody>
-        @foreach (var a in _pending)
-        {
-            <tr><td>@RepoName(a.RepoId) → @a.EnvironmentName</td><td class="text-sm tone-muted">@Approvers(a)</td><td><Ago At="a.CreatedOn" /></td><td><AdoLink Href="@a.WebUrl" /></td></tr>
-        }
-        </tbody></table>
-    </section>
 </div>
 
 @code {

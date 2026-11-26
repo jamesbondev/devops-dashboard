@@ -1,0 +1,26 @@
+@page "/improve"
+@page "/insights"
+@page "/findings"
+@inject NavigationManager Nav
+
+<PageTitle>Improve · DevOps Dashboard</PageTitle>
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>Improve</h1>
+        <p class="page-head__headline">Where to invest: failures shared across repos, flakiness cost, fleet outliers and open audit findings.</p>
+    </div>
+</header>
+<nav class="tabs">
+    <a class="@(_tab == "insights" ? "is-active" : "")" href="insights">Insights</a>
+    <a class="@(_tab == "findings" ? "is-active" : "")" href="findings">Audit findings</a>
+</nav>
+@if (_tab == "findings") { <FindingsSection /> } else { <InsightsSection /> }
+
+@code {
+    private string _tab = "insights";
+    protected override void OnParametersSet()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
+        _tab = path == "findings" ? "findings" : "insights";
+    }
+}

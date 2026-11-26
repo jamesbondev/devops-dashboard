@@ -1,0 +1,50 @@
+@* Pending approvals for assigned repos. Renders nothing when there are none. *@
+@inherits LivePage
+@inject IServiceScopeFactory Scopes
+@using Microsoft.EntityFrameworkCore
+@using Dashboard.Web.Data
+
+@if (_pending.Count > 0)
+{
+    <section class="panel">
+        <header class="panel__head"><h2>Approvals</h2>
+            @if (_mine.Count > 0) { <span class="pill pill--count pill--warn" title="waiting for you">@_mine.Count for you</span> }
+            <span class="panel__meta">@_pending.Count pending in total</span></header>
+        <div class="table-wrap">
+        <table class="t compact"><tbody>
+        @foreach (var a in _pending.OrderByDescending(a => a.AssignedToMe).ThenBy(a => a.CreatedOn))
+        {
+            <tr>
+                <td class="wrap">@if (a.AssignedToMe) { <span class="pill pill--warn">you</span> } <b>@RepoName(a.RepoId)</b> → @a.EnvironmentName
+                    <div class="text-sm tone-muted">@a.StageName@((a.EscalationReason ?? a.Instructions) is { Length: > 0 } why ? $" · {why}" : "")</div></td>
+                <td class="text-sm tone-muted person wrap">@(a.AssignedToMe ? "" : Approvers(a))</td>
+                <td class="nowrap"><Ago At="a.CreatedOn" /></td>
+                <td class="nowrap"><AdoLink Href="@a.WebUrl">@(a.AssignedToMe ? "Approve in ADO ↗" : "Open ↗")</AdoLink></td>
+            </tr>
+        }
+        </tbody></table>
+        </div>
+    </section>
+}
+
+@code {
+    private List<Approval> _mine = [], _pending = [];
+    private Dictionary<string, string> _repos = [];
+
+    protected override async Task LoadAsync()
+    {
+        await using var scope = Scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+        _repos = await db.Repos.AsNoTracking().Where(r => r.Assigned).ToDictionaryAsync(r => r.Id, r => r.Name);
+        var ids = _repos.Keys.ToList();
+        _pending = await db.Approvals.AsNoTracking().Where(a => a.Status == "pending" && a.RepoId != null && ids.Contains(a.RepoId)).OrderBy(a => a.CreatedOn).ToListAsync();
+        _mine = _pending.Where(a => a.AssignedToMe).ToList();
+    }
+
+    private string RepoName(string? id) => id is null ? "?" : _repos.GetValueOrDefault(id, "?");
+    private static string Approvers(Approval a)
+    {
+        try { return string.Join(", ", System.Text.Json.JsonDocument.Parse(a.ApproversJson).RootElement.EnumerateArray().Select(x => x.TryGetProperty("displayName", out var n) ? n.GetString() : "?")); }
+        catch (System.Text.Json.JsonException) { return ""; }
+    }
+}

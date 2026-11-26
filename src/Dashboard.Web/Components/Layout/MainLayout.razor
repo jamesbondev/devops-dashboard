@@ -12,14 +12,10 @@
     <header class="topbar">
         <div class="brand">DevOps Dashboard @if (_status?.Mock == true) { <span class="pill pill--warn" title="Synthetic data — set azureDevOps.mode: live and ADO_PAT to use real data">MOCK DATA</span> }</div>
         <nav class="nav">
-            <NavLink href="" Match="NavLinkMatch.All">Now @if (_attention > 0) { <span class="pill pill--count pill--bad">@_attention</span> }</NavLink>
-            <NavLink href="repos">Health</NavLink>
-            <NavLink href="gates">Gates</NavLink>
-            <NavLink href="findings">Findings</NavLink>
-            <NavLink href="insights">Insights</NavLink>
-            <NavLink href="weekly">Weekly</NavLink>
-            <NavLink href="jobs">Jobs</NavLink>
-            <NavLink href="settings">Settings</NavLink>
+            <a href="" class="@NavClass("now")">Now @if (_attention > 0) { <span class="pill pill--count pill--bad">@_attention</span> }</a>
+            <a href="repos" class="@NavClass("repos")">Repos</a>
+            <a href="improve" class="@NavClass("improve")">Improve</a>
+            <a href="admin" class="nav__admin @NavClass("admin")" title="Admin: jobs, settings, gate checks, glossary">⚙ Admin</a>
         </nav>
         <div class="tools">
             <input id="jump" class="jump" list="repo-list" placeholder="Jump to repo  ( / )" @bind="_jump" @bind:event="oninput" @onkeydown="JumpKey" />
@@ -119,6 +115,21 @@
     {
         _present = !_present;
         try { await JS.InvokeVoidAsync("dash.setPresent", _present); } catch (JSException) { }
+    }
+
+    // Which top-level section the current route belongs to (old routes stay valid and highlight their new home).
+    private string NavClass(string section)
+    {
+        var first = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Split('/')[0];
+        var current = first switch
+        {
+            "" or "weekly" => "now",
+            "repos" or "repo" => "repos",
+            "improve" or "insights" or "findings" => "improve",
+            "admin" or "jobs" or "settings" or "gates" or "glossary" => "admin",
+            _ => "",
+        };
+        return current == section ? "active" : "";
     }
 
     private string FreshnessTitle => _status is null ? "" :

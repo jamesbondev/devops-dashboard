@@ -1,0 +1,37 @@
+@page "/admin"
+@page "/jobs"
+@page "/settings"
+@page "/gates"
+@page "/glossary"
+@inject NavigationManager Nav
+
+<PageTitle>Admin · DevOps Dashboard</PageTitle>
+<header class="page-head">
+    <div class="page-head__text">
+        <h1>Admin</h1>
+        <p class="page-head__headline">Sync jobs, repositories and configuration, gate checks, and the glossary of terms used on every page.</p>
+    </div>
+</header>
+<nav class="tabs">
+    @foreach (var (key, title) in Tabs)
+    {
+        <a class="@(_tab == key ? "is-active" : "")" href="@key">@title</a>
+    }
+</nav>
+@switch (_tab)
+{
+    case "settings": <SettingsSection /> break;
+    case "gates": <GatesSection /> break;
+    case "glossary": <Glossary /> break;
+    default: <JobsSection /> break;
+}
+
+@code {
+    private static readonly (string Key, string Title)[] Tabs = [("jobs", "Jobs & sync"), ("settings", "Settings"), ("gates", "Gate checks"), ("glossary", "Glossary")];
+    private string _tab = "jobs";
+    protected override void OnParametersSet()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
+        _tab = Tabs.Any(t => t.Key == path) ? path : "jobs";
+    }
+}

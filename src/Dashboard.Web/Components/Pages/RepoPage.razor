@@ -10,7 +10,7 @@
 @if (LoadError is not null) { <div class="banner banner--bad">@LoadError</div> }
 @if (_d is null)
 {
-    @if (!Loading) { <div class="empty">Repo <b>@Name</b> is not assigned to the dashboard. <a href="settings">Assign it in Settings</a>.</div> } else { <div class="empty">Loading…</div> }
+    @if (!Loading) { <div class="empty">Repo <b>@Name</b> is not assigned to the dashboard. <a href="settings">Assign it in Admin → Settings</a>.</div> } else { <div class="empty">Loading…</div> }
 }
 else
 {
