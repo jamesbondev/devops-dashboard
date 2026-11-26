@@ -1,6 +1,7 @@
 @page "/settings"
 @inherits LivePage
 @inject RepoAdminService Admin
+@inject ConfigService TypeCfg
 @inject Dashboard.Web.Ado.IAdoClient Ado
 @inject Dashboard.Web.Audit.AuditorClient Auditor
 @inject IServiceScopeFactory Scopes
@@ -26,7 +27,7 @@
             <tr>
                 <td><input type="checkbox" checked="@r.Assigned" disabled="@r.IsDisabled" @onchange="e => Assign(r, (bool)e.Value!)" /></td>
                 <td>@if (r.Assigned) { <a href="repo/@Uri.EscapeDataString(r.Name)">@r.Name</a> } else { @r.Name } @if (r.IsDisabled) { <span class="badge">disabled</span> }</td>
-                <td>@if (r.Assigned) { <select value="@r.Type" @onchange="e => SetType(r, e)"><option>Service</option><option>Library</option><option>Infra</option></select> }</td>
+                <td>@if (r.Assigned) { <select value="@RepoTypes.Resolve(r.Name, r.Type, TypeCfg.Current)" @onchange="e => SetType(r, e)" title="Name patterns (end2end_*, *-e2e-*, *-load-*) apply while this is Service; repos.types in config wins"><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select> }</td>
                 <td class="muted small">@((r.SizeBytes / 1024.0 / 1024).ToString("0.#")) MB</td>
                 <td class="small">@if (r.Assigned) { if (r.BackfilledAt is { } b) { <Ago At="b" /> } else { <span class="badge info">queued</span> } }</td>
             </tr>
@@ -93,7 +94,7 @@
     protected override async Task LoadAsync() => _repos = await Admin.SearchAsync(null);
 
     private async Task Assign(Repo r, bool v) { await Admin.SetAssignedAsync(r.Id, v); _repos = await Admin.SearchAsync(null); }
-    private async Task SetType(Repo r, ChangeEventArgs e) { if (Enum.TryParse<RepoType>(e.Value?.ToString(), out var t)) await Admin.SetTypeAsync(r.Id, t); }
+    private async Task SetType(Repo r, ChangeEventArgs e) { if (Enum.TryParse<RepoType>(e.Value?.ToString(), out var t)) { await Admin.SetTypeAsync(r.Id, t); r.Type = t; } }
 
     private async Task Probe()
     {
