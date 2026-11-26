@@ -137,13 +137,17 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
         // Running / queued
         var active = await db.Runs.AsNoTracking().Where(r => repoIds.Contains(r.RepoId) && r.Status != "completed" && !r.DeletedInAdo).OrderBy(r => r.QueueTime).ToListAsync(ct);
         var activeIds = active.Select(r => r.Id).ToList();
-        var activeStages = await db.TimelineRecords.AsNoTracking().Where(t => activeIds.Contains(t.RunId) && t.Type == "Stage" && !t.IsPreviousAttempt).ToListAsync(ct);
+        var activeRecords = await db.TimelineRecords.AsNoTracking()
+            .Where(t => activeIds.Contains(t.RunId) && !t.IsPreviousAttempt && (t.Type == "Stage" || t.Type.StartsWith("Checkpoint")))
+            .ToListAsync(ct);
+        var activeStages = activeRecords.Where(t => t.Type == "Stage").ToList();
         var running = active.Select(r =>
         {
             var stages = activeStages.Where(s => s.RunId == r.Id).OrderBy(s => s.Order).ToList();
             var current = stages.FirstOrDefault(s => s.State == "inProgress") ?? stages.FirstOrDefault(s => s.State == "pending");
             var env = current is null ? null : StageClassifier.MatchEnvironment(current.Name, current.Identifier, cfg.Environments)?.Name;
-            var waiting = approvals.Any(a => a.RunId == r.Id);
+            var waiting = approvals.Any(a => a.RunId == r.Id)
+                          || (current is not null && StageClassifier.IsGate(current.Name, current.Identifier, cfg.Pipelines));
             return new RunningItem(r, repos.GetValueOrDefault(r.RepoId)?.Name ?? "?", pipelines.GetValueOrDefault(r.PipelineId)?.Name ?? "?", current?.Name, env, waiting);
         }).ToList();
 
@@ -158,9 +162,25 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
             if (gate is null || now - gate.StartTime!.Value < gateCutoff) continue;
             var next = activeStages.Where(s => s.RunId == r.Id && s.Order > gate.Order).OrderBy(s => s.Order)
                 .Select(s => StageClassifier.MatchEnvironment(s.Name, s.Identifier, cfg.Environments)?.Name).FirstOrDefault(n => n is not null);
-            attention.Add(new AttentionItem(AttentionKind.GateBlocked, r.RepoId, repos[r.RepoId].Name,
-                $"Release waiting at '{gate.Name}': {repos[r.RepoId].Name}",
-                $"{pipelines.GetValueOrDefault(r.PipelineId)?.Name} {r.BuildNumber} · waiting {Fmt.Hours((now - gate.StartTime.Value).TotalHours)}" + (next is null ? "" : $" · next: {next}") + " · may need your approval",
+            var pending = PendingChecks(activeRecords.Where(t => t.RunId == r.Id).ToList(), gate.RecordId);
+            var manual = pending.Where(p => StageClassifier.AnyMatch(cfg.Pipelines.ManualReviewCheckPatterns, p.Name)).ToList();
+            var waited = Fmt.Hours((now - gate.StartTime.Value).TotalHours);
+            var repoName = repos[r.RepoId].Name;
+            var pipelineName = pipelines.GetValueOrDefault(r.PipelineId)?.Name;
+            var nextText = next is null ? "" : $" → {next}";
+            if (manual.Count > 0)
+            {
+                // A check that usually needs a human (e.g. Release Minder) is holding the release: treat as "needs you".
+                attention.Add(new AttentionItem(AttentionKind.ApprovalForMe, r.RepoId, repoName,
+                    $"{string.Join(", ", manual.Select(m => m.Name))} review needed: {repoName}{nextText}",
+                    $"{pipelineName} {r.BuildNumber} · '{gate.Name}' waiting {waited}" + (pending.Count > manual.Count ? $" · also pending: {string.Join(", ", pending.Except(manual).Select(p => p.Name))}" : ""),
+                    r.WebUrl, gate.StartTime.Value, 1000 + (now - gate.StartTime.Value).TotalMinutes / 10, "YOU"));
+                continue;
+            }
+            attention.Add(new AttentionItem(AttentionKind.GateBlocked, r.RepoId, repoName,
+                $"Release waiting at '{gate.Name}': {repoName}{nextText}",
+                $"{pipelineName} {r.BuildNumber} · waiting {waited}" +
+                (pending.Count > 0 ? $" · pending: {string.Join(", ", pending.Select(p => $"{p.Name} ({p.Kind})"))}" : " · may need your approval"),
                 r.WebUrl, gate.StartTime.Value, 900 + (now - gate.StartTime.Value).TotalMinutes / 10));
         }
 
@@ -230,6 +250,26 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
             SinceLastLooked = (failuresSince, mergedSince, prodSince, newApprovals, lastLooked),
             GeneratedAt = now,
         };
+    }
+
+    /// <summary>
+    /// Checks still pending under a gate stage, from the timeline: Checkpoint.* records (one per approval/check, named
+    /// after the check, e.g. "Release Minder") beneath the stage's Checkpoint record.
+    /// </summary>
+    internal static List<(string Name, string Kind)> PendingChecks(IReadOnlyList<TimelineRecord> runRecords, string gateRecordId)
+    {
+        var under = new HashSet<string> { gateRecordId };
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var t in runRecords)
+                if (t.ParentId is not null && under.Contains(t.ParentId) && under.Add(t.RecordId)) changed = true;
+        } while (changed);
+        return runRecords.Where(t => under.Contains(t.RecordId) && t.Type.StartsWith("Checkpoint.", StringComparison.OrdinalIgnoreCase)
+                                     && t.State is not ("completed" or "skipped"))
+            .Select(t => (t.Name, Kind: t.Type["Checkpoint.".Length..] switch { "Approval" => "approval", "TaskCheck" => "check", var k => k }))
+            .ToList();
     }
 
     private static int? ParsePrId(string? sourceBranch) =>

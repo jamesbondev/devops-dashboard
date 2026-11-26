@@ -454,20 +454,26 @@ public sealed class MockWorld
         AddStage(timeline, id, "software release 3.4", ++order, t, t.AddMinutes(setup), "succeeded", 1, false, "release_setup");
         t = t.AddMinutes(setup);
 
-        // Approval Gate 2: automated checks; ~12% get blocked (deployment window, dead letters, incident) and need a human.
+        // Automated Approval Gate 2 (environment with 3 checks): "All approvers must approve" (Approvals),
+        // "Release Minder" and "Release Governance API" (Invoke REST API). ~12% get blocked: mostly Release Minder
+        // waiting for a manual review (nothing in the approvals API), sometimes a human approval for your group.
         var gateId = StableGuid($"{id}:gate:stage");
         var ckId = StableGuid($"{id}:gate:checkpoint");
         var approvalId = StableGuid($"{id}:gate:approval");
         var blocked = rng.NextDouble() < 0.12;
+        var blockedByMinder = blocked && rng.NextDouble() < 0.7;
         var gateWait = blocked ? 0.5 + rng.NextDouble() * 6 : (1 + rng.NextDouble() * 3) / 60;
         var gateDone = t.AddHours(gateWait);
-        timeline.Add(new TimelineRecord { RunId = id, RecordId = gateId, Type = "Stage", Name = "Approval Gate 2", Identifier = "approval_gate_2", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone, Order = ++order });
+        var quick = t.AddMinutes(0.5 + rng.NextDouble());
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = gateId, Type = "Stage", Name = "Automated Approval Gate 2", Identifier = "approval_gate_2", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone, Order = ++order });
         timeline.Add(new TimelineRecord { RunId = id, RecordId = ckId, ParentId = gateId, Type = "Checkpoint", Name = "Checkpoint", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone });
-        if (blocked)
-        {
-            timeline.Add(new TimelineRecord { RunId = id, RecordId = approvalId, ParentId = ckId, Type = "Checkpoint.Approval", Name = "Release gate approval", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone });
-            mrun.Approvals.Add((approvalId, "Approval Gate 2", "", t, gateDone, true, EscalationReasons[rng.Next(EscalationReasons.Length)]));
-        }
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = approvalId, ParentId = ckId, Type = "Checkpoint.Approval", Name = "All approvers must approve", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = blocked && !blockedByMinder ? gateDone : quick });
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = StableGuid($"{id}:gate:minder"), ParentId = ckId, Type = "Checkpoint.TaskCheck", Name = "Release Minder", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = blockedByMinder ? gateDone : quick });
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = StableGuid($"{id}:gate:governance"), ParentId = ckId, Type = "Checkpoint.TaskCheck", Name = "Release Governance API", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = quick });
+        var gateJob = StableGuid($"{id}:gate:job");
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = gateJob, ParentId = gateId, Type = "Job", Name = "prod_gate", Identifier = "approval_gate_2.prod_gate", Attempt = 1, Result = "succeeded", State = "completed", StartTime = gateDone, FinishTime = gateDone.AddSeconds(5) });
+        if (blocked && !blockedByMinder)
+            mrun.Approvals.Add((approvalId, "Automated Approval Gate 2", "", t, gateDone, true, EscalationReasons[rng.Next(EscalationReasons.Length)]));
         t = gateDone;
 
         var regionRoll = rng.NextDouble();

@@ -72,6 +72,9 @@ public sealed class PipelinesConfig
     /// <summary>ADO environments used only as gates (e.g. the environment the "Approval Gate 2" deployment job targets).
     /// Their Approvals &amp; checks are read for the Gates page; they are not deployment targets.</summary>
     public List<GateEnvironmentConfig> GateEnvironments { get; set; } = [];
+    /// <summary>Gate checks (timeline Checkpoint.* record names, regex) that usually need a human — e.g. the
+    /// "Release Minder" Invoke REST API check. When one is pending at a gate, Now shows it as needing you.</summary>
+    public List<string> ManualReviewCheckPatterns { get; set; } = ["release minder"];
 }
 
 public sealed class GateEnvironmentConfig

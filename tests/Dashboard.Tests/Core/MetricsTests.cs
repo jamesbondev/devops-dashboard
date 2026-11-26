@@ -446,3 +446,24 @@ public class GateEnvironmentConfigTests
         Assert.Contains(bad.Errors, e => e.Contains("adoId"));
     }
 }
+
+public class GateChecksTests
+{
+    [Fact]
+    public void Pending_checks_under_gate_are_found_from_checkpoint_records()
+    {
+        var recs = new List<TimelineRecord>
+        {
+            new() { RunId = 1, RecordId = "g", Type = "Stage", Name = "Automated Approval Gate 2", State = "inProgress" },
+            new() { RunId = 1, RecordId = "ck", ParentId = "g", Type = "Checkpoint", Name = "Checkpoint", State = "inProgress" },
+            new() { RunId = 1, RecordId = "a", ParentId = "ck", Type = "Checkpoint.Approval", Name = "All approvers must approve", State = "completed" },
+            new() { RunId = 1, RecordId = "m", ParentId = "ck", Type = "Checkpoint.TaskCheck", Name = "Release Minder", State = "inProgress" },
+            new() { RunId = 1, RecordId = "x", ParentId = "ck", Type = "Checkpoint.TaskCheck", Name = "Release Governance API", State = "completed" },
+            new() { RunId = 1, RecordId = "other", Type = "Checkpoint.TaskCheck", Name = "Unrelated", State = "inProgress" },
+        };
+        var pending = Dashboard.Web.Services.NowService.PendingChecks(recs, "g");
+        var p = Assert.Single(pending);
+        Assert.Equal(("Release Minder", "check"), p);
+        Assert.True(StageClassifier.IsGate("Automated Approval Gate 2", null, B.Config().Pipelines));
+    }
+}

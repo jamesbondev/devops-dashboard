@@ -206,3 +206,23 @@ public class AppBootTests : IClassFixture<AppBootTests.Factory>
         Assert.Contains("MOCK DATA", now);
     }
 }
+
+public class MockGateTests
+{
+    [Fact]
+    public void Mock_release_blocked_by_release_minder_shows_pending_check_mid_wait()
+    {
+        var w = new MockWorld();
+        var horizon = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
+        var blocked = w.RunsAt(horizon).First(r => r.Timeline.Any(t => t.Name == "Release Minder" && (t.FinishTime - t.StartTime) > TimeSpan.FromMinutes(20)));
+        var minder = blocked.Timeline.First(t => t.Name == "Release Minder");
+        var mid = minder.StartTime!.Value + (minder.FinishTime!.Value - minder.StartTime.Value) / 2;
+        var (run, timeline) = w.Snapshot(blocked, mid);
+        Assert.Equal("inProgress", run.Status);
+        var gate = timeline.Single(t => t.Type == "Stage" && t.Name == "Automated Approval Gate 2");
+        Assert.Equal("inProgress", gate.State);
+        var pending = Dashboard.Web.Services.NowService.PendingChecks(timeline, gate.RecordId);
+        Assert.Contains(("Release Minder", "check"), pending);
+        Assert.DoesNotContain(pending, p => p.Name == "Release Governance API");
+    }
+}
