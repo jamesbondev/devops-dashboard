@@ -158,3 +158,10 @@ h1:focus, h1:focus-visible { outline: none; }
 table.t code { white-space: nowrap; }
 .spark line { opacity: .35; }
 body.present .person-aware { display: none; }
+
+table.findings { table-layout: fixed; width: 100%; }
+table.findings td { vertical-align: top; overflow-wrap: anywhere; }
+table.findings td.finding .do { margin-top: .35rem; }
+table.findings td.ev div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.findings .factions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+table.findings .factions select { max-width: 100%; }

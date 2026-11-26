@@ -47,20 +47,21 @@ else
 
     <section class="panel" style="margin-top:1rem">
         <header><h2>Checks &amp; findings</h2><span class="meta"><label><input type="checkbox" @bind="_hidePass" /> hide passing</label></span></header>
-        <table class="t">
-            <thead><tr><th>Check</th><th>Result</th><th>Severity</th><th>Finding</th><th>Evidence</th><th>Status</th><th></th></tr></thead>
+        <div class="table-wrap">
+        <table class="t findings">
+            <colgroup><col style="width:15%" /><col style="width:8%" /><col style="width:42%" /><col style="width:20%" /><col style="width:15%" /></colgroup>
+            <thead><tr><th>Check</th><th>Result</th><th>Finding</th><th>Evidence</th><th>Status</th></tr></thead>
             <tbody>
             @foreach (var row in Detail.Findings.Where(x => !_hidePass || x.Finding.Result is not (CheckResult.Pass or CheckResult.NotApplicable)))
             {
                 var fnd = row.Finding;
                 <tr>
                     <td><code>@fnd.CheckId</code><div class="small muted">@fnd.Title</div>@if (fnd.Component is not null) { <span class="chip">@fnd.Component</span> }</td>
-                    <td>@ResultBadge(fnd.Result) @if (fnd.Uncertain) { <span class="badge warn" title="votes disagreed or evidence could not be verified">uncertain</span> } <span class="muted small">@fnd.Kind</span></td>
-                    <td><span class="badge @(fnd.Severity == "high" ? "bad" : fnd.Severity == "medium" ? "warn" : "")">@fnd.Severity</span></td>
-                    <td class="small">@fnd.Explanation @if (!string.IsNullOrWhiteSpace(fnd.Recommendation)) { <div><b>Do:</b> @fnd.Recommendation</div> }</td>
-                    <td class="small mono">@string.Join(", ", Evidence(fnd).Take(4))</td>
-                    <td>@if (row.State is { } st) { <span class="badge @(st.Status == FindingStatus.Done ? "ok" : st.Status == FindingStatus.Dismissed ? "" : "warn")" title="@st.Reason">@st.Status</span> }</td>
-                    <td class="nowrap">
+                    <td>@ResultBadge(fnd.Result) @if (fnd.Uncertain) { <span class="badge warn" title="votes disagreed or evidence could not be verified">uncertain</span> } <div><span class="badge @(fnd.Severity == "high" ? "bad" : fnd.Severity == "medium" ? "warn" : "")">@fnd.Severity</span></div><div class="muted small">@fnd.Kind</div></td>
+                    <td class="small finding"><div>@fnd.Explanation</div>@if (!string.IsNullOrWhiteSpace(fnd.Recommendation)) { <div class="do"><b>Do:</b> @fnd.Recommendation</div> }</td>
+                    <td class="small mono ev">@foreach (var ev in Evidence(fnd).Take(4)) { <div title="@ev">@ShortPath(ev)</div> }</td>
+                    <td>@if (row.State is { } st) { <span class="badge @(st.Status == FindingStatus.Done ? "ok" : st.Status == FindingStatus.Dismissed ? "" : "warn")" title="@st.Reason">@st.Status</span> }
+                    <div class="factions">
                         @if (row.State is { } s2 && fnd.Result is CheckResult.Fail or CheckResult.Partial)
                         {
                             @if (s2.Status == FindingStatus.New) { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.Accepted, null)">Accept</button> }
@@ -71,11 +72,12 @@ else
                             }
                             else { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.New, null)">Reopen</button> }
                         }
-                    </td>
+                    </div></td>
                 </tr>
             }
             </tbody>
         </table>
+        </div>
     </section>
 }
 
@@ -124,6 +126,13 @@ else
         if (a.ResultJson is null) return null;
         try { return JsonSerializer.Deserialize<Dashboard.Core.Contracts.AuditResult>(a.ResultJson, Dashboard.Web.Ado.JsonDefaults.Web); }
         catch (JsonException) { return null; }
+    }
+
+    // "src/A/B/C.cs:12" -> "…/B/C.cs:12" (full path on hover)
+    private static string ShortPath(string p)
+    {
+        var parts = p.Split('/');
+        return parts.Length <= 2 ? p : "…/" + string.Join('/', parts[^2..]);
     }
 
     private static IEnumerable<string> Evidence(Finding f)
