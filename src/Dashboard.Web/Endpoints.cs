@@ -18,6 +18,42 @@ public static class Endpoints
                       : Results.Problem("database unavailable");
         });
 
+        // Diagnostics: how each recent default-branch run of a repo is rated (explains "main red").
+        app.MapGet("/debug/red/{name}", async (string name, DashboardDbContext db, ConfigService config, HealthService health) =>
+        {
+            var cfg = config.Current;
+            var repo = await db.Repos.AsNoTracking().FirstOrDefaultAsync(r => r.Name == name);
+            if (repo is null) return Results.NotFound($"no repo '{name}'");
+            var calc = new Core.Metrics.BuildMetricsCalculator(cfg);
+            var sb = new StringBuilder();
+            var h = (await health.GetAllAsync()).FirstOrDefault(x => x.Repo.Id == repo.Id);
+            sb.AppendLine($"repo {repo.Name}  defaultBranch={repo.DefaultBranch ?? "(null → refs/heads/main)"}  assigned={repo.Assigned}");
+            sb.AppendLine($"openRed: {(h?.OpenRed is { } o ? $"pipeline {o.PipelineId} since {o.Start:u} (run {o.StartRunId})" : "none")}");
+            sb.AppendLine($"release pipeline ids: {string.Join(",", h?.ReleasePipelineIds ?? new HashSet<int>())}").AppendLine();
+            var pipelines = await db.Pipelines.AsNoTracking().Where(p => p.RepoId == repo.Id).ToListAsync();
+            var branches = await db.Runs.AsNoTracking().Where(r => r.RepoId == repo.Id).GroupBy(r => r.SourceBranch)
+                .Select(g => new { g.Key, Count = g.Count(), Last = g.Max(r => r.QueueTime) }).ToListAsync();
+            sb.AppendLine("runs by branch: " + string.Join("; ", branches.OrderByDescending(b => b.Count).Take(8).Select(b => $"{b.Key}={b.Count} (last {b.Last:u})"))).AppendLine();
+            foreach (var p in pipelines)
+            {
+                sb.AppendLine($"## pipeline {p.Id} '{p.Name}'");
+                var runs = await db.Runs.AsNoTracking().Where(r => r.PipelineId == p.Id && r.SourceBranch == (repo.DefaultBranch ?? "refs/heads/main"))
+                    .OrderByDescending(r => r.QueueTime).Take(12).ToListAsync();
+                foreach (var r in runs)
+                {
+                    var recs = await db.TimelineRecords.AsNoTracking().Where(t => t.RunId == r.Id && (t.Type == "Stage" || t.Type == "Job" || t.Type == "Phase" || t.Type.StartsWith("Checkpoint"))).ToListAsync();
+                    var ev = calc.EvaluateRun(r, recs);
+                    var cps = recs.Where(t => t.Type.StartsWith("Checkpoint")).Select(t => t.ParentId).ToHashSet();
+                    var stages = recs.Where(t => t.Type == "Stage").OrderBy(t => t.Order).Select(t =>
+                        $"{t.Name}[a{t.Attempt}{(t.IsPreviousAttempt ? " prev" : "")}]={t.Result ?? t.State}{(Core.Metrics.StageClassifier.IsBuildStage(t.Name, t.Identifier, cfg, cps.Contains(t.RecordId)) ? "" : " (not build)")}");
+                    sb.AppendLine($"  {r.QueueTime:u} #{r.BuildNumber} id={r.Id} reason={r.Reason} status={r.Status} result={r.Result} → {ev.Final}  attempts=[{string.Join(",", ev.Attempts.Select(a => $"{a.Outcome}@{a.Time:u}"))}]");
+                    sb.AppendLine($"      stages: {(recs.Count == 0 ? "(no timeline synced)" : string.Join(" | ", stages))}");
+                }
+                sb.AppendLine();
+            }
+            return Results.Text(sb.ToString(), "text/plain; charset=utf-8");
+        });
+
         app.MapGet("/export/health.md", async (HealthService health, IClock clock) =>
         {
             var all = await health.GetAllAsync();
