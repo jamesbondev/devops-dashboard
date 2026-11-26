@@ -64,10 +64,15 @@ ENV ASPNETCORE_URLS=http://0.0.0.0:8081 \
     COPILOT_HOME=/copilot-home \
     COPILOT_AUTO_UPDATE=false \
     DOTNET_NOLOGO=1
+# ca-certificates + openssl: trust extra corporate root CAs from /certs (docker/with-ca.sh).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates openssl \
+ && rm -rf /var/lib/apt/lists/*
 # /copilot-home holds the login (mount a named volume there); /clones is mounted read-only.
 RUN mkdir -p /copilot-home /clones && chown "$APP_UID:$APP_UID" /copilot-home && chmod 700 /copilot-home
 COPY --from=cli /opt/copilot-cli /opt/copilot-cli
 COPY --from=build /app /app
+COPY --chmod=755 docker/with-ca.sh /usr/local/bin/with-ca
 COPY --chmod=755 <<'EOF' /usr/local/bin/auditor-entrypoint
 #!/bin/sh
 # serve (default)      start the auditor HTTP service
@@ -94,5 +99,5 @@ EOF
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8081
-ENTRYPOINT ["/usr/local/bin/auditor-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/with-ca", "/usr/local/bin/auditor-entrypoint"]
 CMD ["serve"]

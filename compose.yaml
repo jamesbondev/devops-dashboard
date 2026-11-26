@@ -28,6 +28,7 @@ services:
       - clones:/clones                # partial clones + per-audit worktrees
       - ./config:/app/config:ro       # edit config/dashboard.yaml, then Settings → Reload config
       - ./audit:/app/audit:ro         # rubric (+ audit/rubric/team/*.yaml for team standards)
+      - ./certs:/certs:ro             # extra root CAs for TLS-inspecting proxies (see certs/README.md)
     depends_on:
       - auditor
     restart: unless-stopped
@@ -48,6 +49,7 @@ services:
     volumes:
       - clones:/clones:ro             # read-only view of the worktrees
       - copilot-auth:/copilot-home    # Copilot login (treat as a secret)
+      - ./certs:/certs:ro             # extra root CAs for TLS-inspecting proxies (see certs/README.md)
     restart: unless-stopped
 
 volumes:

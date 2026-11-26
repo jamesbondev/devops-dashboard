@@ -35,3 +35,7 @@ Thumbs.db
 
 # local dev runs
 src/Dashboard.Web/Data/clones/
+
+# corporate CA certificates (local only)
+certs/*
+!certs/README.md

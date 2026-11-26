@@ -71,6 +71,11 @@ Alternatively, set `COPILOT_GITHUB_TOKEN` to a fine-grained GitHub PAT with the 
 
 **Settings → Check auditor** shows the engine, auth status and available models. Choose the model in `config/dashboard.yaml` → `audit.model` (it falls back to the strongest available). Set `audit.votes: 3` for majority voting on judgement checks.
 
+**Corporate proxy / `certificate verify failed: unable to get local issuer certificate`:** your network re-signs HTTPS
+with a company root CA that the Linux containers don't trust. Export that root CA (Windows: `certmgr.msc` → Trusted Root
+Certification Authorities → your company's root → Export, Base-64 .cer) into `./certs/`, then `docker compose up -d`.
+Both containers add it to their trust store at start-up (see `certs/README.md`).
+
 If the auditor is unreachable, audits still run **facts-only**: static checks plus component discovery. They re-run with Copilot once it's available.
 
 ## Configuration notes
