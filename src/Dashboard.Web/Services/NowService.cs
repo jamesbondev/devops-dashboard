@@ -293,11 +293,17 @@ public static class Fmt
     public static string Hours(double h) => h < 1 ? $"{h * 60:0}m" : h < 48 ? $"{h:0.#}h" : $"{h / 24:0.#}d";
     public static string Ago(DateTimeOffset t, DateTimeOffset now)
     {
+        if (t.Year < 2000) return "—";
         var d = now - t;
+        if (d.TotalDays > 60) return t.ToString(t.Year == now.Year ? "d MMM" : "d MMM yyyy");
         return d.TotalSeconds < 60 ? "just now" : d.TotalMinutes < 60 ? $"{d.TotalMinutes:0}m ago" : d.TotalHours < 48 ? $"{d.TotalHours:0}h ago" : $"{d.TotalDays:0}d ago";
     }
     public static string Pct(double? v) => v is null ? "—" : $"{v:P0}";
     public static string Pct1(double? v) => v is null ? "—" : $"{v:P1}";
     public static string Num(double? v, string format = "0.#") => v is null ? "—" : v.Value.ToString(format);
+    private static readonly System.Text.RegularExpressions.Regex Ansi = new(@"(\x1B|\u001B|\uFFFD|\bO)?\[[0-9;]*m");
+    private static readonly System.Text.RegularExpressions.Regex CancelledBy = new(@"(cancell?ed by) [^.]+\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    /// <summary>Error text fit for a team-visible page: no ANSI colour codes, no person names.</summary>
+    public static string Msg(string? m) => m is null ? "" : CancelledBy.Replace(Ansi.Replace(m, ""), "$1 a user.");
     public static string ShortSha(string? sha) => sha is null ? "—" : sha.Length > 8 ? sha[..8] : sha;
 }

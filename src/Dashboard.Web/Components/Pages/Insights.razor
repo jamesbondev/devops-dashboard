@@ -15,7 +15,7 @@
         @foreach (var c in m.CrossRepoFailures.Take(10))
         {
             <div style="border-bottom:1px solid var(--border);padding:.4rem 0">
-                <div class="mono small">@c.SampleMessage</div>
+                <div class="mono small">@Fmt.Msg(c.SampleMessage)</div>
                 <div class="small"><b>@c.Repos repos</b>, @c.Runs runs · last <Ago At="c.LastSeen" /> · <span class="muted">@string.Join(", ", c.RepoNames)</span></div>
                 <button style="margin-top:.25rem" @onclick="() => CopyNote(c)">Copy evidence note for the platform team</button>
             </div>

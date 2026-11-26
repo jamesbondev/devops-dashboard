@@ -28,7 +28,7 @@
             <table class="t"><tbody>
             @foreach (var c in g) { <tr><td>@c.DisplayName</td><td class="muted small">@c.CheckType</td><td class="small">@c.ApproverNames</td><td>@if (c.RequiresMe) { <span class="badge warn">you</span> }</td></tr> }
             </tbody></table>
-            <div class="small muted">Deployed to by: @string.Join(", ", _deployersByEnv.GetValueOrDefault(g.Key) ?? [])</div>
+            @if (_deployersByEnv.GetValueOrDefault(g.Key) is { Count: > 0 } dep) { <div class="small muted">Deployed to by: @string.Join(", ", dep)</div> }
         }
     </section>
 

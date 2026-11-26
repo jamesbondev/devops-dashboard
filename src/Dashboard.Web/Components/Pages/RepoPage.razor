@@ -77,7 +77,7 @@ else
                     <header><h2>Top failure causes</h2><Info Text="First error per failed task, normalised (ids/paths/numbers removed) and hashed. Same fingerprint across repos usually means a platform/template issue — see Insights." /></header>
                     @if (_d.TopFailures.Count == 0) { <div class="empty">No failures recorded.</div> }
                     <table class="t"><tbody>
-                    @foreach (var tf in _d.TopFailures) { <tr><td class="mono small">@Trunc(tf.Message, 180)</td><td class="num nowrap">@tf.Count runs</td><td><Ago At="tf.Last" /></td></tr> }
+                    @foreach (var tf in _d.TopFailures) { <tr><td class="mono small">@Trunc(Fmt.Msg(tf.Message), 180)</td><td class="num nowrap">@tf.Count runs</td><td><Ago At="tf.Last" /></td></tr> }
                     </tbody></table>
                 </section>
             </div>
@@ -96,7 +96,7 @@ else
                             <td class="muted">@r.Run.Reason</td>
                             <td>@OutcomeBadge(r.BuildOutcome, r.Run.Status) @if (r.FlakyJobs > 0) { <span class="badge warn" title="a job failed then passed on retry">flaky</span> }</td>
                             <td>@foreach (var s in r.Stages) { <span class="dot @StageDot(s)" title="@s.Name: @(s.Result ?? s.State) (attempt @s.Attempt)" style="margin-right:2px"></span> }
-                                @if (r.FirstError is not null) { <div class="mono small muted">@Trunc(r.FirstError, 140)</div> }</td>
+                                @if (r.FirstError is not null) { <div class="mono small muted">@Trunc(Fmt.Msg(r.FirstError), 140)</div> }</td>
                             <td class="num">@Fmt.Num(r.Minutes, "0")</td>
                             <td class="person muted">@r.Run.RequestedFor</td>
                             <td><Ago At="r.Run.QueueTime" /></td>
