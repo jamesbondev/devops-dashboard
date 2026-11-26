@@ -142,30 +142,41 @@ else
 
         case "deployments":
             <div class="kpi-row mb-4">
-                <div class="kpi"><div class="kpi__label">Deploys / week to Production</div><div class="kpi__value">@h.Delivery.DeploysPerWeek.ToString("0.#")</div><div class="kpi__sub">distinct component+version, sim or prod</div></div>
-                <div class="kpi"><div class="kpi__label">Lead time (median)</div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianLeadTimeHours ?? 0)</div><div class="kpi__sub">PR publish → first Production deploy</div></div>
-                <div class="kpi"><div class="kpi__label">…of which approval wait</div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianApprovalWaitHours ?? 0)</div><div class="kpi__sub">review @Fmt.Hours(h.Delivery.MedianReviewHours ?? 0) · pipeline @Fmt.Hours(h.Delivery.MedianMergeToDeployHours ?? 0)</div></div>
-                <div class="kpi"><div class="kpi__label">Change failure (proxy)</div><div class="kpi__value">@Fmt.Pct(h.Delivery.ChangeFailureRateProxy)</div><div class="kpi__sub">failed Production deploy stages ÷ all</div></div>
+                <div class="kpi"><div class="kpi__label">Deploys / week to Production <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@h.Delivery.DeploysPerWeek.ToString("0.#")</div><div class="kpi__sub">distinct component+version, sim or prod</div></div>
+                <div class="kpi"><div class="kpi__label">Lead time, median <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianLeadTimeHours ?? 0)</div><div class="kpi__sub">PR publish → first Production deploy</div></div>
+                <div class="kpi"><div class="kpi__label">…of which approval wait <span class="kpi__window">median</span></div><div class="kpi__value">@Fmt.Hours(h.Delivery.MedianApprovalWaitHours ?? 0)</div><div class="kpi__sub">review @Fmt.Hours(h.Delivery.MedianReviewHours ?? 0) · pipeline @Fmt.Hours(h.Delivery.MedianMergeToDeployHours ?? 0)</div></div>
+                <div class="kpi"><div class="kpi__label">Change failure (proxy) <span class="kpi__window">@Config.Current.Metrics.WindowDays d</span></div><div class="kpi__value">@Fmt.Pct(h.Delivery.ChangeFailureRateProxy)</div><div class="kpi__sub">failed Production deploy stages ÷ all</div></div>
             </div>
+            <section class="panel mb-4">
+                <header class="panel__head"><h2>Components × environments <span class="kpi__window">60 d</span></h2><Info Text="@($"Latest successful deployment per component and environment. This tab looks back 60 days; health metrics and the KPIs above use {Config.Current.Metrics.WindowDays} days. '= same' = same version as the environment to its left; ⚠ = Production-tier environments on different versions.")" Term="same" /></header>
+                <DeployMatrix Rows="RepoMatrix()" Environments="RepoEnvironments()" ByRepo="false" />
+            </section>
             <section class="panel">
-                <header class="panel__head"><h2>Deployments (60 days)</h2><Info Text="Derived from pipeline stages that match an environment's stagePatterns. Components from skaffold/sqlproj + deploy rules." /></header>
-                <table class="t">
-                    <thead><tr><th>When</th><th>Environment</th><th>Component</th><th>Version</th><th>Result</th><th class="num">Approval wait</th><th>Template</th></tr></thead>
+                <header class="panel__head"><h2>Releases by version <span class="kpi__window">60 d</span></h2><Info Text="One row per build version: the environments it reached (✕ = a failed attempt there), overall result and the longest approval wait. Derived from pipeline stages matching an environment's stagePatterns." /></header>
+                @{ var releases = Releases().ToList(); }
+                @if (releases.Count == 0) { <div class="empty">No deployments in 60 d.</div> }
+                else
+                {
+                <div class="table-wrap">
+                <table class="t compact">
+                    <thead><tr><th>Version</th><th>Component</th><th>Environments</th><th>Result</th><th class="num">Approval wait</th><th>Last</th></tr></thead>
                     <tbody>
-                    @foreach (var d in _d.Deployments.Take(200))
+                    @foreach (var r in releases.Take(60))
                     {
-                        <tr>
-                            <td><Ago At="d.StartTime" /></td>
-                            <td>@d.EnvironmentName @if (d.Tier == EnvironmentTier.Production) { <span class="pill">prod-tier</span> }</td>
-                            <td>@(h.Components.FirstOrDefault(c => c.Id == d.ComponentId)?.Name ?? "(repo)")</td>
-                            <td class="mono">@d.Version</td>
-                            <td>@OutcomeBadge(ResultClassifier.Classify(d.Result, Config.Current.Results), d.FinishTime is null ? "inProgress" : "completed")</td>
-                            <td class="num">@Fmt.Hours(d.WaitSeconds / 3600)</td>
-                            <td class="text-sm tone-muted">@TemplateComplianceEvaluator.BranchName(d.TemplateRef)</td>
+                        var (br, num) = Fmt.ShortVer(r.Version, h.Repo.Name);
+                        <tr class="@(r.Failed && !r.Passed ? "is-bad" : "")">
+                            <td class="nowrap" title="@r.Version">@if (br is not null && !Fmt.IsMainBranch(br)) { <span class="pill pill--ref is-nondefault" title="@br">@br</span> } <span class="ver">@num</span></td>
+                            <td class="wrap text-sm">@string.Join(", ", r.Components)</td>
+                            <td class="wrap"><span class="chip-list">@foreach (var e in r.Envs) { <span class="pill pill--env @Fmt.EnvClass(e.Name, Config.Current)" title="@(e.Ok ? "succeeded" : "failed")">@e.Name@(e.Ok ? "" : " ✕")</span> }</span></td>
+                            <td class="nowrap">@if (r.Running) { <span class="pill pill--info">running</span> } else if (r.Failed && r.Passed) { <span class="pill pill--warn">partly failed</span> } else if (r.Failed) { <span class="pill pill--bad">failed</span> } else { <span class="pill pill--ok">passed</span> }</td>
+                            <td class="num">@(r.MaxWaitHours > 0 ? Fmt.Hours(r.MaxWaitHours) : "—")</td>
+                            <td class="nowrap"><Ago At="r.Last" /></td>
                         </tr>
                     }
                     </tbody>
                 </table>
+                </div>
+                }
             </section>
             break;
 
@@ -222,21 +233,25 @@ else
                     </tbody></table>
                 </section>
                 <section class="panel">
-                    <header class="panel__head"><h2>All rules</h2></header>
-                    <table class="t"><tbody>
-                    @foreach (var o in h.Tier.Outcomes.OrderBy(o => Array.IndexOf(TierResult.Order, o.Tier)))
-                    {
-                        <tr><td><code>@o.RuleId</code></td><td><TierBadge Tier="@o.Tier" /></td><td>@o.Title <Info Text="@(RuleCatalog.Known.GetValueOrDefault(o.RuleId)?.Formula ?? "")" /></td>
-                            <td>@RuleBadge(o.Status)</td><td class="text-sm">@o.Display</td></tr>
-                    }
+                    @{ var outcomes = h.Tier.Outcomes.OrderBy(o => o.Status == RuleStatus.Fail ? 0 : o.Status == RuleStatus.Insufficient ? 1 : o.Status == RuleStatus.Pass ? 3 : 2).ThenBy(o => Array.IndexOf(TierResult.Order, o.Tier)).ToList();
+                       var notPassing = outcomes.Where(o => o.Status != RuleStatus.Pass).ToList(); var passing = outcomes.Where(o => o.Status == RuleStatus.Pass).ToList(); }
+                    <header class="panel__head"><h2>All rules</h2><span class="panel__meta">@passing.Count of @outcomes.Count passing</span></header>
+                    <table class="t compact"><tbody>
+                    @foreach (var o in _showPassingRules ? outcomes : notPassing) { @RuleRow(o) }
                     </tbody></table>
+                    @if (passing.Count > 0) { <button class="clamp-toggle mt-2" @onclick="() => _showPassingRules = !_showPassingRules">@(_showPassingRules ? "Hide passing rules" : $"Show {passing.Count} passing rules")</button> }
                 </section>
-                <section class="panel">
-                    <header class="panel__head"><h2>Branch policies (default branch)</h2></header>
-                    @if (_d.Policies.Count == 0) { <div class="empty">No policies synced.</div> }
-                    <table class="t"><tbody>
-                    @foreach (var p in _d.Policies) { <tr><td>@p.TypeName</td><td>@(p.IsEnabled ? (p.IsBlocking ? "required" : "optional") : "disabled")</td><td class="tone-muted text-sm">@p.RefName @(p.MinimumApproverCount is { } n ? $"min {n}" : "")</td></tr> }
-                    </tbody></table>
+                <section class="panel @(_d.Policies.Count == 0 ? "is-empty" : "")" data-empty="No policies synced">
+                    <header class="panel__head"><h2>Branch policies <span class="kpi__window">default branch</span></h2></header>
+                    <div class="panel__body">
+                    @{ var req = _d.Policies.Count(p => p.IsEnabled && p.IsBlocking); var opt = _d.Policies.Count(p => p.IsEnabled && !p.IsBlocking); var off = _d.Policies.Count(p => !p.IsEnabled); }
+                    <details>
+                        <summary><span class="tone-muted">@req required, @opt optional@(off > 0 ? $", {off} disabled" : "")</span></summary>
+                        <table class="t compact mt-2"><tbody>
+                        @foreach (var p in _d.Policies.OrderByDescending(p => p.IsEnabled && p.IsBlocking)) { <tr><td class="wrap">@p.TypeName</td><td class="nowrap"><span class="pill @(p.IsEnabled && p.IsBlocking ? "pill--info" : "")">@(p.IsEnabled ? (p.IsBlocking ? "required" : "optional") : "disabled")</span></td><td class="tone-muted text-sm nowrap">@p.RefName @(p.MinimumApproverCount is { } n ? $"min {n}" : "")</td></tr> }
+                        </tbody></table>
+                    </details>
+                    </div>
                 </section>
                 <section class="panel">
                     <header class="panel__head"><h2>Facts</h2><span class="panel__meta">from the static scanner @(h.Facts is { } f ? $"@ {Fmt.ShortSha(f.Sha)}" : "")</span></header>
@@ -264,6 +279,59 @@ else
     private string Tab => TabQuery ?? "overview";
     private RepoDetail? _d;
     private bool _hidePr = true;
+    private bool _showPassingRules;
+
+    private RenderFragment RuleRow(RuleOutcome o) => __builder =>
+    {
+        <tr><td class="nowrap"><code>@o.RuleId</code></td><td class="nowrap"><TierBadge Tier="@o.Tier" /></td><td class="wrap">@o.Title <Info Text="@(RuleCatalog.Known.GetValueOrDefault(o.RuleId)?.Formula ?? "")" /></td>
+            <td class="nowrap">@RuleBadge(o.Status)</td><td class="text-sm wrap">@o.Display</td></tr>
+    };
+
+    private List<string> RepoEnvironments()
+    {
+        var used = _d!.Deployments.Select(d => d.EnvironmentName).ToHashSet();
+        return Config.Current.Environments.OrderBy(e => e.Order).Select(e => e.Name).Where(used.Contains).ToList();
+    }
+
+    private IEnumerable<MatrixRow> RepoMatrix()
+    {
+        var h = _d!.Health;
+        foreach (var g in _d.Deployments.GroupBy(d => d.ComponentId))
+        {
+            var comp = h.Components.FirstOrDefault(c => c.Id == g.Key);
+            var cells = new Dictionary<string, MatrixCell>();
+            foreach (var e in g.GroupBy(d => d.EnvironmentName))
+            {
+                var latest = e.Where(d => d.FinishTime is not null && ResultClassifier.Classify(d.Result, Config.Current.Results) == Outcome.Pass).MaxBy(d => d.FinishTime);
+                var running = e.FirstOrDefault(d => d.FinishTime is null);
+                cells[e.Key] = new MatrixCell(latest, running, false, 0);
+            }
+            var prodVersions = cells.Values.Where(c => c.Latest?.Tier == EnvironmentTier.Production).Select(c => c.Latest!.Version).Distinct().Count();
+            if (prodVersions > 1)
+                foreach (var k in cells.Keys.ToList()) if (cells[k].Latest?.Tier == EnvironmentTier.Production) cells[k] = cells[k] with { Drift = true };
+            yield return new MatrixRow(h.Repo.Id, h.Repo.Name, comp, cells);
+        }
+    }
+
+    private sealed record EnvHit(string Name, bool Ok);
+    private sealed record Release(string? Version, List<string> Components, List<EnvHit> Envs, bool Passed, bool Failed, bool Running, double MaxWaitHours, DateTimeOffset? Last);
+
+    private IEnumerable<Release> Releases()
+    {
+        var h = _d!.Health;
+        var order = Config.Current.Environments.ToDictionary(e => e.Name, e => e.Order);
+        return _d.Deployments.GroupBy(d => d.Version).Select(g =>
+        {
+            var outcomes = g.Select(d => (d, o: d.FinishTime is null ? (Outcome?)null : ResultClassifier.Classify(d.Result, Config.Current.Results))).ToList();
+            var envs = g.GroupBy(d => d.EnvironmentName).OrderBy(e => order.GetValueOrDefault(e.Key, 99))
+                .Select(e => new EnvHit(e.Key, e.Any(d => d.FinishTime is null || ResultClassifier.Classify(d.Result, Config.Current.Results) == Outcome.Pass))).ToList();
+            return new Release(g.Key,
+                g.Select(d => h.Components.FirstOrDefault(c => c.Id == d.ComponentId)?.Name ?? "(repo)").Distinct().ToList(),
+                envs,
+                outcomes.Any(x => x.o == Outcome.Pass), outcomes.Any(x => x.o == Outcome.Fail), outcomes.Any(x => x.o is null),
+                g.Max(d => d.WaitSeconds) / 3600, g.Max(d => d.FinishTime ?? d.StartTime));
+        }).OrderByDescending(r => r.Last);
+    }
     private bool _busy;
     private string? _templateSummary;
 

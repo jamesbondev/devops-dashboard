@@ -7,8 +7,13 @@
 
 <header class="page-head">
     <div class="page-head__text">
-        <h1>What's happening now</h1>
-        <p class="page-head__headline">as of <Ago At="_model?.GeneratedAt" /></p>
+        <h1>Now</h1>
+        @if (_model is { } hm)
+        {
+            var red = hm.Attention.Count(a => a.Kind == AttentionKind.MainRed);
+            var mine = hm.Attention.Count(a => a.Kind is AttentionKind.ApprovalForMe or AttentionKind.GateBlocked);
+            <p class="page-head__headline"><strong class="@(red > 0 ? "tone-bad" : "")">@red repo@(red == 1 ? "" : "s")</strong> with main red · @mine approval@(mine == 1 ? "" : "s") waiting · @hm.Running.Count running · as of <Ago At="hm.GeneratedAt" /></p>
+        }
     </div>
 </header>
 
@@ -16,26 +21,31 @@
 @if (Loading && _model is null) { <div class="empty">Loading…</div> }
 else if (_model is { } m)
 {
+    var sl = m.SinceLastLooked;
+    var slEmpty = sl.Failures == 0 && sl.Merged == 0 && sl.ProdDeploys == 0 && sl.NewApprovals == 0;
+    var window = sl.Since is { } since ? "since " + Config.WorkingHours.ToLocal(since).ToString("ddd HH:mm") : "24h";
     <div class="stack">
-    @foreach (var panel in Config.Current.NowView.Panels)
+    @foreach (var panel in Config.Current.NowView.Panels.OrderBy(p => IsEmpty(p, m, slEmpty)))
     {
         switch (panel)
         {
             case "sinceLastLooked":
-                <section class="panel">
-                    <header class="panel__head"><h2>Since you last looked</h2><span class="panel__meta">@(m.SinceLastLooked.Since is { } s ? "since " + Config.WorkingHours.ToLocal(s).ToString("ddd HH:mm") : "last 24h")</span></header>
+                <section class="panel @(slEmpty ? "is-empty" : "")" data-empty="@($"Nothing new {window}")">
+                    <header class="panel__head"><h2>Since you last looked</h2>@if (!slEmpty) { <span class="panel__meta">@window</span> }</header>
+                    <div class="panel__body">
                     <div class="kpi-row">
-                        <div class="kpi"><div class="kpi__label">Main/CI failures</div><div class="kpi__value @(m.SinceLastLooked.Failures > 0 ? "bad" : "")">@m.SinceLastLooked.Failures</div></div>
-                        <div class="kpi"><div class="kpi__label">PRs merged</div><div class="kpi__value">@m.SinceLastLooked.Merged</div></div>
-                        <div class="kpi"><div class="kpi__label">Production deploys</div><div class="kpi__value good">@m.SinceLastLooked.ProdDeploys</div><div class="kpi__sub">sim + prod</div></div>
-                        <div class="kpi"><div class="kpi__label">New approvals for you</div><div class="kpi__value @(m.SinceLastLooked.NewApprovals > 0 ? "warnc" : "")">@m.SinceLastLooked.NewApprovals</div></div>
+                        <div class="kpi @(sl.Failures > 0 ? "kpi--bad" : "")"><div class="kpi__label">Main/CI failures <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.Failures</div></div>
+                        <div class="kpi"><div class="kpi__label">PRs merged <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.Merged</div></div>
+                        <div class="kpi"><div class="kpi__label">Production deploys <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.ProdDeploys</div><div class="kpi__sub">sim + prod</div></div>
+                        <div class="kpi @(sl.NewApprovals > 0 ? "kpi--warn" : "")"><div class="kpi__label">New approvals for you <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.NewApprovals</div></div>
+                    </div>
                     </div>
                 </section>
                 break;
             case "attention":
                 <section class="panel">
-                    <header class="panel__head"><h2>Needs attention</h2><span class="pill pill--@(m.Attention.Count > 0 ? "bad" : "ok")">@m.Attention.Count</span>
-                        <span class="panel__meta">ranked: your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
+                    <header class="panel__head"><h2>Needs attention</h2><span class="pill pill--count @(m.Attention.Count > 0 ? "pill--bad" : "")">@m.Attention.Count</span>
+                        <Info Text="Ranked: your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation." Term="attention" /></header>
                     @if (m.Attention.Count == 0) { <div class="empty">Nothing needs you right now.</div> }
                     <ul class="att-list">
                         @foreach (var a in m.Attention.Take(_showAll ? 500 : 25))
@@ -49,104 +59,56 @@ else if (_model is { } m)
                             </li>
                         }
                     </ul>
-                    @if (m.Attention.Count > 25 && !_showAll) { <button class="btn btn--secondary mt-2" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
+                    @if (m.Attention.Count > 25 && !_showAll) { <button class="btn btn--secondary btn--sm mt-2" @onclick="() => _showAll = true">Show all @m.Attention.Count</button> }
                 </section>
                 break;
             case "matrix":
                 <section class="panel">
-                    <header class="panel__head"><h2>Components × environments</h2><Info Text="Latest successful deployment per component and environment (derived from pipeline stages). ⚠ = sim and prod on different versions. +N = commits merged since the deployed build was queued." />
-                        <span class="panel__meta"><label><input type="checkbox" @bind="_matrixProdOnly" /> only components with Production deploys</label></span></header>
-                    @if (m.Matrix.Count == 0) { <div class="empty">No deployments synced yet.</div> }
-                    else
-                    {
-                        <div class="table-wrap">
-                        <table class="t compact matrix">
-                            <thead><tr><th>Repo</th>@foreach (var e in m.Environments) { <th>@e</th> }</tr></thead>
-                            <tbody>
-                            @foreach (var g in MatrixGroups(m))
-                            {
-                                <tr>
-                                    <td class="nowrap"><a href="repo/@Uri.EscapeDataString(g.RepoName)">@g.RepoName</a>
-                                        @if (g.Components.Count == 1) { <div class="text-sm tone-muted">@g.Components[0]</div> }
-                                        else if (g.Components.Count > 1) { <div class="text-sm tone-muted" title="@string.Join("\n", g.Components)">@g.Components.Count components</div> }</td>
-                                    @{ string? prev = null; }
-                                    @foreach (var e in m.Environments)
-                                    {
-                                        var cell = g.Row.Cells.GetValueOrDefault(e);
-                                        var d = cell?.Latest;
-                                        var same = d is not null && prev is not null && d.Version == prev;
-                                        <td class="ver-cell @(d is null && cell?.InProgress is null ? "is-empty" : "") @(same ? "is-same" : "") @(cell?.Drift == true ? "is-drift" : "")" title="@d?.Version">
-                                            @if (d is null && cell?.InProgress is null) { <span>—</span> }
-                                            else
-                                            {
-                                                @if (d is not null)
-                                                {
-                                                    var (br, num) = ShortVer(d.Version, g.RepoName);
-                                                    <div class="ver-cell__main">
-                                                        @if (same) { <span>= same</span> }
-                                                        else
-                                                        {
-                                                            @if (br is not null && !IsMain(br)) { <span class="pill pill--ref is-nondefault" title="@br">@br</span> }
-                                                            <span class="ver">@num</span>
-                                                            @if (cell!.Drift) { <span class="tone-warn" title="sim and prod run different versions">⚠</span> }
-                                                        }
-                                                    </div>
-                                                    <div class="ver-cell__meta"><Ago At="d.FinishTime" />@if (cell!.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</div>
-                                                }
-                                                @if (cell!.InProgress is { } ip) { <span class="pill pill--info"><span class="dot dot--info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying")</span> }
-                                            }
-                                        </td>
-                                        prev = d?.Version ?? prev;
-                                    }
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                        </div>
-                    }
+                    <header class="panel__head"><h2>Components × environments</h2><Info Text="Latest successful deployment per component and environment (from pipeline stages). Legend: '= same' = same version as the environment to its left; ⚠ = sim and prod run different versions (drift); +N = commits merged since the deployed build was queued; '—' = never deployed. A coloured pill = deployed from a non-default branch." Term="same" />
+                        <span class="panel__meta row">
+                            <label class="check"><input type="checkbox" @bind="_changesOnly" /> changes only</label>
+                            <label class="check"><input type="checkbox" @bind="_matrixProdOnly" /> only with Production deploys</label>
+                        </span></header>
+                    <DeployMatrix Rows="m.Matrix.Where(r => !_matrixProdOnly || r.Cells.Values.Any(c => c.Latest?.Tier == EnvironmentTier.Production))" Environments="m.Environments" ChangesOnly="_changesOnly" />
                 </section>
                 break;
             case "running":
-                <section class="panel">
-                    <header class="panel__head"><h2>Running &amp; queued</h2><span class="pill pill--info">@m.Running.Count</span></header>
-                    @if (m.Running.Count == 0) { <div class="empty">Nothing running.</div> }
-                    else
-                    {
+                <section class="panel @(m.Running.Count == 0 ? "is-empty" : "")" data-empty="Nothing running">
+                    <header class="panel__head"><h2>Running &amp; queued</h2>@if (m.Running.Count > 0) { <span class="pill pill--count pill--info">@m.Running.Count</span> }</header>
+                    <div class="panel__body table-wrap">
                         <table class="t">
                             <thead><tr><th>Repo</th><th>Pipeline</th><th>Build</th><th>Stage</th><th>Reason</th><th class="person">By</th><th>Queued</th></tr></thead>
                             <tbody>
                             @foreach (var r in m.Running)
                             {
                                 <tr>
-                                    <td><a href="repo/@Uri.EscapeDataString(r.RepoName)">@r.RepoName</a></td>
-                                    <td>@r.PipelineName</td>
-                                    <td><AdoLink Href="@r.Run.WebUrl">@r.Run.BuildNumber</AdoLink></td>
-                                    <td>@if (r.WaitingApproval) { <span class="pill pill--warn">⏸ approval</span> } @(r.CurrentStage ?? (r.Run.Status == "notStarted" ? "queued" : "—")) @if (r.Environment is not null) { <span class="tone-muted text-sm">→ @r.Environment</span> }</td>
-                                    <td class="tone-muted">@r.Run.Reason</td>
-                                    <td class="person tone-muted">@r.Run.RequestedFor</td>
-                                    <td><Ago At="r.Run.QueueTime" /></td>
+                                    <td class="nowrap"><a href="repo/@Uri.EscapeDataString(r.RepoName)">@r.RepoName</a></td>
+                                    <td class="wrap">@r.PipelineName</td>
+                                    <td class="nowrap"><AdoLink Href="@r.Run.WebUrl">@r.Run.BuildNumber</AdoLink></td>
+                                    <td class="wrap">@if (r.WaitingApproval) { <span class="pill pill--warn">waiting approval</span> } @(r.CurrentStage ?? (r.Run.Status == "notStarted" ? "queued" : "—")) @if (r.Environment is not null) { <span class="tone-muted text-sm">→ @r.Environment</span> }</td>
+                                    <td class="nowrap tone-muted">@r.Run.Reason</td>
+                                    <td class="nowrap person tone-muted">@r.Run.RequestedFor</td>
+                                    <td class="nowrap"><Ago At="r.Run.QueueTime" /></td>
                                 </tr>
                             }
                             </tbody>
                         </table>
-                    }
+                    </div>
                 </section>
                 break;
             case "shipped":
-                <section class="panel">
-                    <header class="panel__head"><h2>Shipped in the last @Config.Current.NowView.ShippedHours h</h2><span class="pill pill--ok">@m.Shipped.Count</span></header>
-                    @if (m.Shipped.Count == 0) { <div class="empty">Nothing shipped.</div> }
-                    else
-                    {
-                        <table class="t">
+                <section class="panel @(m.Shipped.Count == 0 ? "is-empty" : "")" data-empty="@($"Nothing shipped in {Config.Current.NowView.ShippedHours}h")">
+                    <header class="panel__head"><h2>Shipped <span class="kpi__window">last @Config.Current.NowView.ShippedHours h</span></h2>@if (m.Shipped.Count > 0) { <span class="pill pill--count">@m.Shipped.Count</span> }</header>
+                    <div class="panel__body table-wrap">
+                        <table class="t compact">
                             <tbody>
                             @foreach (var sh in m.Shipped)
                             {
-                                <tr><td class="nowrap"><Ago At="sh.At" /></td><td><span class="pill">@(sh.Kind == "deploy" ? "deploy" : "merge")</span></td><td><a href="repo/@Uri.EscapeDataString(sh.RepoName)">@sh.RepoName</a></td><td><AdoLink Href="@sh.Link">@sh.What</AdoLink></td></tr>
+                                <tr><td class="nowrap"><Ago At="sh.At" /></td><td class="nowrap"><span class="pill">@(sh.Kind == "deploy" ? "deploy" : "merge")</span></td><td class="nowrap"><a href="repo/@Uri.EscapeDataString(sh.RepoName)">@sh.RepoName</a></td><td class="wrap"><AdoLink Href="@sh.Link">@sh.What</AdoLink></td></tr>
                             }
                             </tbody>
                         </table>
-                    }
+                    </div>
                 </section>
                 break;
         }
@@ -155,37 +117,18 @@ else if (_model is { } m)
 }
 
 @code {
-    private sealed record MatrixGroup(string RepoName, List<string> Components, MatrixRow Row);
-
-    // One row per repo when all its components are on the same versions; otherwise one row per distinct version set.
-    private IEnumerable<MatrixGroup> MatrixGroups(NowModel m)
+    private static bool IsEmpty(string panel, NowModel m, bool slEmpty) => panel switch
     {
-        var rows = m.Matrix.Where(r => !_matrixProdOnly || r.Cells.Values.Any(c => c.Latest?.Tier == EnvironmentTier.Production));
-        foreach (var repo in rows.GroupBy(r => r.RepoName))
-            foreach (var same in repo.GroupBy(r => string.Join("|", m.Environments.Select(e => r.Cells.GetValueOrDefault(e)?.Latest?.Version))))
-                yield return new MatrixGroup(repo.Key, same.Where(r => r.Component is not null).Select(r => r.Component!.Name).ToList(), same.First());
-    }
-
-    private static bool IsMain(string br) => br is "main" or "master";
-
-    // "interest_accrual-release_main_20261124.4" -> ("main", "20261124.4")
-    private static (string? Branch, string Num) ShortVer(string? v, string repo)
-    {
-        if (string.IsNullOrEmpty(v)) return (null, "");
-        var s = v;
-        var norm = (string x) => x.Replace('-', '_').ToLowerInvariant();
-        if (norm(s).StartsWith(norm(repo))) s = s[repo.Length..].TrimStart('-', '_');
-        foreach (var p in new[] { "release_", "release-" }) if (s.StartsWith(p, StringComparison.OrdinalIgnoreCase)) s = s[p.Length..];
-        var i = s.LastIndexOf('_');
-        if (i <= 0) return (null, s);
-        var br = s[..i];
-        if (br.Length > 18) br = br[..16] + "…";
-        return (br, s[(i + 1)..]);
-    }
+        "sinceLastLooked" => slEmpty,
+        "running" => m.Running.Count == 0,
+        "shipped" => m.Shipped.Count == 0,
+        _ => false,
+    };
 
     private NowModel? _model;
     private bool _showAll;
     private bool _matrixProdOnly;
+    private bool _changesOnly = true;
     private DateTimeOffset? _lastLooked;
     private bool _markedSeen;
 

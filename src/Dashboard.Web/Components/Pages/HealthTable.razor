@@ -2,15 +2,19 @@
 @inherits LivePage
 @inject HealthService HealthSvc
 
-<PageTitle>Health · DevOps Dashboard</PageTitle>
+<PageTitle>Repos · DevOps Dashboard</PageTitle>
 
+@{
+    var w = Config.Current.Metrics.WindowDays;
+    var redNow = _all.Count(h => h.OpenRed is not null && !h.IsTestRepo);
+}
 <header class="page-head">
     <div class="page-head__text">
-        <h1>Health</h1>
-        <p class="page-head__headline">@_all.Count repos · window @Config.Current.Metrics.WindowDays days · tiers are cumulative gates; <b>*</b> = provisional (blocked only by insufficient data)</p>
+        <h1>Repos</h1>
+        <p class="page-head__headline"><strong class="@(redNow > 0 ? "tone-bad" : "")">@redNow repo@(redNow == 1 ? "" : "s")</strong> with main red · @_all.Count repos · metrics over @w d <Info Text="Tiers are cumulative gates: a repo is Gold only if every Bronze, Silver and Gold rule passes. * = provisional (the next tier is blocked only by rules with insufficient data)." Term="tier" /></p>
     </div>
     <div class="page-head__actions">
-        <a class="btn btn--secondary" href="export/health.md" target="_blank">Export Markdown</a>
+        <a class="btn btn--secondary btn--sm" href="export/health.md" target="_blank">Export Markdown</a>
     </div>
 </header>
 
@@ -19,10 +23,14 @@
 <div class="kpi-row mb-4">
     @foreach (var t in TierResult.Order.Reverse())
     {
-        <div class="kpi"><div class="kpi__label"><TierBadge Tier="@t" /></div><div class="kpi__value">@_all.Count(h => h.Tier.Tier == t)</div><div class="kpi__sub">@_all.Count(h => h.Tier.Tier == t && h.Tier.Provisional) provisional</div></div>
+        var prov = _all.Count(h => h.Tier.Tier == t && h.Tier.Provisional);
+        <button type="button" class="kpi @(_tier == t ? "is-active" : "")" title="Filter the table to @t" aria-pressed="@(_tier == t)" @onclick="() => _tier = _tier == t ? string.Empty : t">
+            <div class="kpi__label"><TierBadge Tier="@t" /></div><div class="kpi__value">@_all.Count(h => h.Tier.Tier == t) <small>repos</small></div>
+            @if (prov > 0) { <div class="kpi__sub">@prov provisional</div> }
+        </button>
     }
-    <div class="kpi"><div class="kpi__label">Main red now</div><div class="kpi__value @(_all.Any(h => h.OpenRed is not null && !h.IsTestRepo) ? "bad" : "good")">@_all.Count(h => h.OpenRed is not null && !h.IsTestRepo)</div>@if (_all.Count(h => h.OpenRed is not null && h.IsTestRepo) is > 0 and var tf) { <div class="kpi__sub">+@tf test repo@(tf == 1 ? "" : "s") failing</div> }</div>
-    <div class="kpi"><div class="kpi__label">Wasted minutes (flaky)</div><div class="kpi__value">@_all.Where(h => !h.IsTestRepo).Sum(h => h.WastedMinutes).ToString("0")</div><div class="kpi__sub">re-runs that later went green@(_all.Any(h => h.IsTestRepo) ? $" · test repos +{_all.Where(h => h.IsTestRepo).Sum(h => h.WastedMinutes):0}" : "")</div></div>
+    <div class="kpi @(redNow > 0 ? "kpi--bad" : "")"><div class="kpi__label">Main red <span class="kpi__window">now</span></div><div class="kpi__value">@redNow <small>repos</small></div>@if (_all.Count(h => h.OpenRed is not null && h.IsTestRepo) is > 0 and var tf) { <div class="kpi__sub">+@tf test repo@(tf == 1 ? "" : "s") failing</div> }</div>
+    <div class="kpi"><div class="kpi__label">Wasted on flaky re-runs <span class="kpi__window">@w d</span></div><div class="kpi__value">@_all.Where(h => !h.IsTestRepo).Sum(h => h.WastedMinutes).ToString("#,0") <small>min</small></div><div class="kpi__sub">re-runs that later went green@(_all.Any(h => h.IsTestRepo) ? $" · test repos +{_all.Where(h => h.IsTestRepo).Sum(h => h.WastedMinutes):0}" : "")</div></div>
 </div>
 
 <div class="filters">
@@ -35,6 +43,7 @@
     <label><input type="checkbox" @bind="_tiles" /> tiles</label>
 </div>
 
+@{ var rows = Rows.ToList(); var active = rows.Where(h => !NoData(h)).ToList(); var idle = rows.Where(NoData).ToList(); }
 @if (!_tiles)
 {
 <div class="table-wrap panel p-0">
@@ -42,55 +51,41 @@
     <thead>
         <tr>
             <th class="sortable" @onclick='() => Sort("name")'>Repo</th>
-            <th class="sortable" @onclick='() => Sort("tier")'>Tier <Info Text="Highest tier whose rules all pass. Hover a gap for details." /></th>
-            <th>Next tier gap</th>
-            <th class="sortable num" @onclick='() => Sort("red")'>Main red <Info Text="Open red interval on the default branch (build stages only; deploy failures don't count)." /></th>
-            <th class="sortable num" @onclick='() => Sort("success")'>Main % <Info Text="Final build-stage outcome pass ÷ (pass+fail), default-branch non-PR runs. succeededWithIssues = fail; cancelled/skipped excluded." /></th>
-            <th class="sortable num" @onclick='() => Sort("flaky")'>Flaky % <Info Text="Runs with ≥1 job whose earlier attempt failed and final attempt passed ÷ completed runs." /></th>
-            <th class="sortable num" @onclick='() => Sort("wasted")'>Wasted min</th>
-            <th class="sortable num" @onclick='() => Sort("review")'>1st review <Info Text="Working hours from publish to first human non-author vote/comment. Median when n<20, p85 when n≥20." /></th>
-            <th class="sortable num" @onclick='() => Sort("oldest")'>Oldest PR</th>
-            <th class="sortable" @onclick='() => Sort("prod")'>Last Production</th>
-            <th>Templates</th>
-            <th>Audit</th>
-            <th>12-wk main %</th>
+            <th class="sortable" @onclick='() => Sort("tier")'>Tier · next gap <Info Text="Highest tier whose rules all pass, and the rules that block the next tier (hover for all)." Term="tier" /></th>
+            <th class="sortable num" @onclick='() => Sort("success")'>Main % <span class="kpi__window">@w d · 12 wk</span> <Info Text="Final build-stage outcome pass ÷ (pass+fail), default-branch non-PR runs. succeededWithIssues = fail; cancelled/skipped excluded. n = completed runs. Sparkline = weekly rate over 12 weeks." Term="n" /></th>
+            <th class="sortable num" @onclick='() => Sort("flaky")'>Flaky % <span class="kpi__window">@w d</span> <Info Text="Runs with ≥1 job whose earlier attempt failed and final attempt passed ÷ completed runs." /></th>
+            <th class="sortable num" @onclick='() => Sort("review")'>1st review <span class="kpi__window">working h</span> <Info Text="Working hours from publish to first human non-author vote/comment. Median when n<20, p85 when n≥20." Term="p85" /></th>
+            <th class="sortable" @onclick='() => Sort("prod")'>Last prod</th>
+            <th class="sortable num" @onclick='() => Sort("findings")'>Open findings</th>
         </tr>
     </thead>
     <tbody>
-    @foreach (var h in Rows)
-    {
-        <tr>
-            <td><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a> <span class="tone-muted text-sm">@RepoTypes.Label(h.Type)</span>
-                @if (h.Dormant) { <span class="pill">dormant</span> } @if (h.Repo.Muted) { <span class="pill">muted</span> } @if (h.Repo.Pinned) { <span class="pill pill--info">pinned</span> }
-                <div class="chip-list mt-1">@foreach (var c in h.Components) { <ComponentChip Name="@c.Name" Kind="c.Kind" /> }</div></td>
-            <td class="nowrap"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /> @TierMove(h)</td>
-            <td class="gap">@if (h.Tier.NextTier is { } nt) { <span title="@string.Join("\n", h.Tier.NextTierGaps.Select(g => $"{g.RuleId} {g.Title}: {g.Display} ({g.Status})"))">@nt: @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") — @string.Join(", ", h.Tier.NextTierGaps.Take(2).Select(g => g.RuleId))</span> } else { <span class="tone-ok">top tier</span> }</td>
-            <td class="num">@if (h.OpenRed is { } red) { <span class="pill pill--bad">red @Fmt.Hours((Now - red.Start).TotalHours)</span> } else { <span class="tone-ok">●</span> }</td>
-            <td class="num @(h.MainSuccessRate < 0.9 && !h.IsTestRepo ? "bad" : "")" title="@(h.IsTestRepo ? "Test pass rate on main (test repo)" : "")">@Fmt.Pct(h.MainSuccessRate) <span class="tone-muted text-sm">n=@h.CompletedBuildRuns</span></td>
-            <td class="num @(h.FlakyRunRate >= 0.05 ? "warnc" : "")">@Fmt.Pct1(h.FlakyRunRate)</td>
-            <td class="num">@h.WastedMinutes.ToString("0")</td>
-            <td class="num">@(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—") <span class="tone-muted text-sm">@h.Prs.FirstReviewLabel n=@h.Prs.ReviewedInWindow</span></td>
-            <td class="num @(h.Prs.OldestActiveWorkingDays > 5 ? "warnc" : "")">@(h.Prs.OldestActiveWorkingDays is { } od ? $"{od:0.#}d" : "—")</td>
-            <td>@if (h.LastProductionDeploy is { } lp) { <Ago At="lp.FinishTime" /> <span class="tone-muted text-sm">@lp.EnvironmentName</span> } else { <span class="tone-muted">never</span> }</td>
-            <td>@TemplateSummary(h)</td>
-            <td>@if (h.LatestAudit is { } a) { <Ago At="a.CompletedAt" /> @if (h.OpenFindings > 0) { <span class="pill pill--warn">@h.OpenFindings open</span> } } else { <span class="tone-muted">—</span> }</td>
-            <td><Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Label="weekly main success rate" /></td>
-        </tr>
-    }
+    @foreach (var h in active) { @RowFragment(h) }
     </tbody>
 </table>
 </div>
+@if (idle.Count > 0)
+{
+    <details class="panel mt-4">
+        <summary>No data (@idle.Count) — dormant or no completed main runs in @w d</summary>
+        <div class="table-wrap mt-2">
+        <table class="t compact"><tbody>
+        @foreach (var h in idle) { @RowFragment(h) }
+        </tbody></table>
+        </div>
+    </details>
+}
 }
 else
 {
     <div class="grid-3">
-    @foreach (var h in Rows)
+    @foreach (var h in rows)
     {
         <div class="panel">
-            <header><h2><a href="repo/@Uri.EscapeDataString(h.Repo.Name)">@h.Repo.Name</a></h2><span class="panel__meta"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /></span></header>
+            <header class="panel__head"><h2><a href="repo/@Uri.EscapeDataString(h.Repo.Name)">@h.Repo.Name</a></h2><span class="panel__meta"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /></span></header>
             <div class="row text-sm">
-                <span>Main @Fmt.Pct(h.MainSuccessRate)</span><span>Flaky @Fmt.Pct1(h.FlakyRunRate)</span><span>1st review @(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—")</span>
-                @if (h.OpenRed is not null) { <span class="pill pill--bad">red</span> }
+                <span>Main @Fmt.Pct(h.MainSuccessRate)</span><span>Flaky @Fmt.Pct1(h.FlakyRunRate)</span><span>1st review @(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#} h" : "—")</span>
+                @if (h.OpenRed is not null) { <span class="pill pill--bad">main red</span> }
             </div>
             <Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Width="260" />
         </div>
@@ -124,6 +119,7 @@ else
                 "flaky" => _desc ? o.ThenBy(h => h.FlakyRunRate ?? -1) : o.ThenByDescending(h => h.FlakyRunRate ?? -1),
                 "wasted" => _desc ? o.ThenBy(h => h.WastedMinutes) : o.ThenByDescending(h => h.WastedMinutes),
                 "review" => _desc ? o.ThenBy(h => h.Prs.FirstReviewHours ?? -1) : o.ThenByDescending(h => h.Prs.FirstReviewHours ?? -1),
+                "findings" => _desc ? o.ThenBy(h => h.OpenFindings) : o.ThenByDescending(h => h.OpenFindings),
                 "oldest" => _desc ? o.ThenBy(h => h.Prs.OldestActiveWorkingDays ?? -1) : o.ThenByDescending(h => h.Prs.OldestActiveWorkingDays ?? -1),
                 "red" => _desc ? o.ThenBy(h => h.OpenRed?.Start ?? DateTimeOffset.MaxValue) : o.ThenBy(h => h.OpenRed is null).ThenBy(h => h.OpenRed?.Start),
                 "prod" => _desc ? o.ThenByDescending(h => h.LastProductionDeploy?.FinishTime) : o.ThenBy(h => h.LastProductionDeploy?.FinishTime ?? DateTimeOffset.MinValue),
@@ -133,6 +129,32 @@ else
         }
     }
 
+    private static bool NoData(RepoHealth h) => h.Dormant || h.CompletedBuildRuns == 0;
+
+    private RenderFragment RowFragment(RepoHealth h) => __builder =>
+    {
+        <tr class="@(h.OpenRed is not null && !h.IsTestRepo ? "is-bad" : "")">
+            <td class="nowrap"><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a>
+                @if (h.OpenRed is { } red) { <span class="pill pill--bad" title="Main red since @red.Start.ToString("u")">✕ red @Fmt.Hours((Now - red.Start).TotalHours)</span> }
+                @if (h.Repo.Pinned) { <span class="pill pill--info">pinned</span> } @if (h.Dormant) { <span class="pill">dormant</span> } @if (h.Repo.Muted) { <span class="pill">muted</span> }
+                <div class="text-sm tone-muted">@RepoTypes.Label(h.Type)@if (h.Components.Count > 0) { <span title="@string.Join("\n", h.Components.Select(c => c.Name))"> · @h.Components.Count component@(h.Components.Count == 1 ? "" : "s")</span> }</div></td>
+            <td class="wrap"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /> @TierMove(h)
+                @if (h.Tier.NextTier is { } nt && h.Tier.NextTierGaps.Count > 0)
+                {
+                    var first = h.Tier.NextTierGaps[0];
+                    <div class="text-sm tone-muted" title="@string.Join("\n", h.Tier.NextTierGaps.Select(g => $"{g.RuleId} {g.Title}: {g.Display} ({g.Status})"))">→ @nt: @first.Title@(h.Tier.NextTierGaps.Count > 1 ? $" +{h.Tier.NextTierGaps.Count - 1} more" : "")</div>
+                }
+                else if (h.Tier.NextTier is null) { <div class="text-sm tone-muted">top tier</div> }</td>
+            <td class="num @(h.MainSuccessRate < 0.9 && !h.IsTestRepo ? "tone-bad" : "")" title="@(h.IsTestRepo ? "Test pass rate on main (test repo)" : "")">
+                <div class="row">@Fmt.Pct(h.MainSuccessRate) <span class="tone-subtle text-sm">n=@h.CompletedBuildRuns</span></div>
+                <Spark Points="h.Weekly.Select(w => w.SuccessRate).ToList()" Min="0" Max="1" Width="96" Height="20" Label="weekly main success rate, 12 weeks" /></td>
+            <td class="num @(h.FlakyRunRate >= 0.05 ? "tone-warn" : "")">@Fmt.Pct1(h.FlakyRunRate)</td>
+            <td class="num">@(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#} h" : "—") <div class="tone-subtle text-sm">@h.Prs.FirstReviewLabel n=@h.Prs.ReviewedInWindow</div></td>
+            <td class="nowrap">@if (h.LastProductionDeploy is { } lp) { <Ago At="lp.FinishTime" /> <div class="tone-muted text-sm">@lp.EnvironmentName</div> } else { <span class="tone-subtle">never</span> }</td>
+            <td class="num">@if (h.LatestAudit is null) { <span class="tone-subtle" title="not audited yet">—</span> } else if (h.OpenFindings > 0) { <a href="repo/@Uri.EscapeDataString(h.Repo.Name)?tab=audit"><span class="pill pill--warn">@h.OpenFindings</span></a> } else { <span>0</span> }</td>
+        </tr>
+    };
+
     private void Sort(string key) { if (_sort == key) _desc = !_desc; else { _sort = key; _desc = false; } }
 
     private static MarkupString TierMove(RepoHealth h)
@@ -140,20 +162,5 @@ else
         if (h.PreviousTier is null || h.PreviousTier == h.Tier.Tier) return new("");
         var up = Array.IndexOf(TierResult.Order, h.Tier.Tier) > Array.IndexOf(TierResult.Order, h.PreviousTier);
         return new(up ? $"<span class='tone-ok' title='was {h.PreviousTier} 4 weeks ago'>▲</span>" : $"<span class='tone-bad' title='was {h.PreviousTier} 4 weeks ago'>▼</span>");
-    }
-
-    private static MarkupString TemplateSummary(RepoHealth h)
-    {
-        if (h.Templates.Count == 0) return new("<span class='tone-muted'>—</span>");
-        var non = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.NonCompliant);
-        var exp = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.Experimental);
-        var none = h.Templates.Count(t => t.RefStatus == TemplateRefStatus.NoTemplate);
-        var stale = h.Templates.Count(t => t.Stale);
-        var parts = new List<string>();
-        if (non > 0) parts.Add($"<span class='pill pill--bad'>{non} off-branch</span>");
-        if (none > 0) parts.Add($"<span class='pill pill--bad'>{none} no templates</span>");
-        if (exp > 0) parts.Add($"<span class='pill pill--info'>{exp} next</span>");
-        if (stale > 0) parts.Add($"<span class='pill pill--warn' title='last run used an older template commit than the branch head'>{stale} stale</span>");
-        return new(parts.Count == 0 ? "<span class='pill pill--ok'>main</span>" : string.Join(" ", parts));
     }
 }

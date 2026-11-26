@@ -1,64 +1,80 @@
 @page "/findings"
 @inherits LivePage
 @inject FindingsService FindingsSvc
-@inject IJSRuntime JS
 
 <PageTitle>Findings · DevOps Dashboard</PageTitle>
 <header class="page-head">
     <div class="page-head__text">
         <h1>Audit findings</h1>
-        <p class="page-head__headline">tracked across audits by fingerprint (check + component + path); Done is set automatically when a finding disappears</p>
+        <p class="page-head__headline"><strong>@_rows.Count(r => r.State.Status is FindingStatus.New or FindingStatus.Accepted) open</strong> across @_themes.Count theme@(_themes.Count == 1 ? "" : "s") · tracked across audits by fingerprint (check + component + path); Done is set automatically when a finding disappears <Info Text="New = first seen, not triaged. Accepted = agreed, to do. Dismissed = won't fix / false positive / not applicable. Done = no longer reported by the latest audit." Term="finding-status" /></p>
     </div>
     <div class="page-head__actions">
-        <button class="btn btn--secondary" @onclick="Copy">Copy Markdown</button>
-    <a class="btn btn--secondary" href="export/findings.md" target="_blank">Export .md</a>
+        <a class="btn btn--secondary btn--sm" href="export/findings.md" target="_blank">Export .md</a>
     </div>
 </header>
-@if (_copied) { <div class="banner">Copied to clipboard.</div> }
 
-<section class="panel mb-4">
+<section class="panel mb-4 @(_themes.Count == 0 ? "is-empty" : "")" data-empty="No open findings">
     <header class="panel__head"><h2>Themes across repos</h2><Info Text="Open findings grouped by check — plan work around themes rather than individual findings." /></header>
-    @if (_themes.Count == 0) { <div class="empty">No open findings.</div> }
+    <div class="panel__body table-wrap">
     <table class="t"><thead><tr><th>Check</th><th>Title</th><th>Severity</th><th class="num">Repos</th><th>Repos affected</th></tr></thead><tbody>
-    @foreach (var t in _themes)
+    @foreach (var t in _themes.OrderBy(t => SevRank(t.Severity)).ThenByDescending(t => t.Repos))
     {
-        <tr><td><code>@t.CheckId</code></td><td>@t.Title</td><td><span class="pill pill--@(t.Severity == "high" ? "bad" : t.Severity == "medium" ? "warn" : "")">@t.Severity</span></td><td class="num">@t.Repos</td>
-            <td class="text-sm row">@foreach (var r in t.RepoNames) { <a href="repo/@Uri.EscapeDataString(r)?tab=audit">@r</a> }</td></tr>
+        <tr><td class="nowrap"><code>@t.CheckId</code></td><td class="wrap">@t.Title</td><td class="nowrap">@Sev(t.Severity)</td><td class="num">@t.Repos</td>
+            <td class="wrap text-sm">
+                <span class="chip-list">@foreach (var r in t.RepoNames.Take(4)) { <a href="repo/@Uri.EscapeDataString(r)?tab=audit">@r</a> }</span>
+                @if (t.RepoNames.Count > 4)
+                {
+                    <details><summary>+@(t.RepoNames.Count - 4) more</summary>
+                        <span class="chip-list">@foreach (var r in t.RepoNames.Skip(4)) { <a href="repo/@Uri.EscapeDataString(r)?tab=audit">@r</a> }</span></details>
+                }
+            </td></tr>
     }
     </tbody></table>
+    </div>
 </section>
 
 <section class="panel">
     <header class="panel__head"><h2>Backlog</h2>
         <span class="panel__meta filters mb-0">
-            <label>Status <select class="select" @bind="_status"><option value="open">open (new + accepted)</option><option value="">all</option><option>New</option><option>Accepted</option><option>Dismissed</option><option>Done</option></select></label>
-            <label>Severity <select class="select" @bind="_severity"><option value="">all</option><option>high</option><option>medium</option><option>low</option></select></label>
-            <input type="search" class="input" placeholder="repo or check…" @bind="_q" @bind:event="oninput" />
+            <label>Status <select class="select select--sm" @bind="_status"><option value="open">open (new + accepted)</option><option value="">all</option><option>New</option><option>Accepted</option><option>Dismissed</option><option>Done</option></select></label>
+            <label>Severity <select class="select select--sm" @bind="_severity"><option value="">all</option><option>high</option><option>medium</option><option>low</option></select></label>
+            <input type="search" class="input input--sm" placeholder="repo or check…" @bind="_q" @bind:event="oninput" />
         </span>
     </header>
+    @{ var rows = Rows.Take(300).ToList(); }
+    @if (rows.Count == 0) { <div class="empty">No findings match.</div> }
+    else
+    {
+    <div class="table-wrap">
     <table class="t">
-        <thead><tr><th>Repo</th><th>Check</th><th>Severity</th><th>Finding</th><th>Status</th><th>First seen</th></tr></thead>
+        <thead><tr><th>Severity</th><th>Check</th><th>Repo</th><th>Finding</th><th>Status</th><th>First seen</th></tr></thead>
         <tbody>
-        @foreach (var r in Rows.Take(300))
+        @foreach (var r in rows)
         {
+            var fp = r.State.Fingerprint;
             <tr>
-                <td><a href="repo/@Uri.EscapeDataString(r.RepoName)?tab=audit">@r.RepoName</a></td>
-                <td><code>@r.State.CheckId</code></td>
-                <td><span class="pill pill--@(r.State.Severity == "high" ? "bad" : r.State.Severity == "medium" ? "warn" : "")">@r.State.Severity</span></td>
-                <td class="text-sm">@(r.Latest?.Explanation ?? "")</td>
-                <td><span class="pill" title="@r.State.Reason">@r.State.Status</span></td>
-                <td><Ago At="r.State.FirstSeen" /></td>
+                <td class="nowrap">@Sev(r.State.Severity)</td>
+                <td class="nowrap"><code>@r.State.CheckId</code></td>
+                <td class="nowrap"><a href="repo/@Uri.EscapeDataString(r.RepoName)?tab=audit">@r.RepoName</a></td>
+                <td class="wrap text-sm"><div class="prose clamp-2 is-click @(_open.Contains(fp) ? "is-open" : "")" title="@(_open.Contains(fp) ? "Click to collapse" : "Click to expand")" @onclick="() => Toggle(fp)">@(r.Latest?.Explanation ?? "")</div></td>
+                <td class="nowrap"><span class="pill @(r.State.Status switch { FindingStatus.New => "pill--info", FindingStatus.Accepted => "pill--warn", FindingStatus.Done => "pill--ok", _ => "" })" title="@r.State.Reason">@r.State.Status</span></td>
+                <td class="nowrap"><Ago At="r.State.FirstSeen" /></td>
             </tr>
         }
         </tbody>
     </table>
+    </div>
+    }
 </section>
 
 @code {
     private IReadOnlyList<BacklogRow> _rows = [];
     private IReadOnlyList<FleetTheme> _themes = [];
     private string _status = "open", _severity = "", _q = "";
-    private bool _copied;
+    private readonly HashSet<string> _open = [];
+    private void Toggle(string fp) { if (!_open.Remove(fp)) _open.Add(fp); }
+    private static int SevRank(string? s) => s switch { "critical" => 0, "high" => 1, "medium" => 2, "low" => 3, _ => 4 };
+    private static MarkupString Sev(string? s) => new($"<span class='pill {(SevRank(s) <= 1 ? "pill--bad" : s == "medium" ? "pill--warn" : s == "low" ? "pill--info" : "")}'>{System.Net.WebUtility.HtmlEncode(s ?? "—")}</span>");
 
     protected override async Task LoadAsync()
     {
@@ -69,11 +85,6 @@
     private IEnumerable<BacklogRow> Rows => _rows.Where(r =>
         (_status == "" || (_status == "open" ? r.State.Status is FindingStatus.New or FindingStatus.Accepted : r.State.Status.ToString() == _status))
         && (_severity == "" || r.State.Severity == _severity)
-        && (_q == "" || r.RepoName.Contains(_q, StringComparison.OrdinalIgnoreCase) || r.State.CheckId.Contains(_q, StringComparison.OrdinalIgnoreCase)));
-
-    private async Task Copy()
-    {
-        try { _copied = await JS.InvokeAsync<bool>("dash.copy", FindingsService.ExportBacklogMarkdown(_rows, Now)); }
-        catch (JSException) { _copied = false; }
-    }
+        && (_q == "" || r.RepoName.Contains(_q, StringComparison.OrdinalIgnoreCase) || r.State.CheckId.Contains(_q, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(r => SevRank(r.State.Severity)).ThenBy(r => r.State.CheckId).ThenBy(r => r.RepoName);
 }

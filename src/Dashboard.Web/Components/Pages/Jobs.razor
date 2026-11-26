@@ -30,22 +30,41 @@
 
 <div class="grid-2">
 <section class="panel">
-    <header class="panel__head"><h2>Sources</h2></header>
-    <table class="t"><thead><tr><th>Cursor</th><th>Last success</th><th>Last error</th></tr></thead><tbody>
-    @foreach (var c in _cursors) { <tr><td class="mono text-sm">@CursorName(c.Key)</td><td><Ago At="c.LastSuccessAt" /></td><td class="text-sm @(c.LastErrorAt > c.LastSuccessAt ? "bad" : "muted")">@if (c.LastErrorAt is not null) { <Ago At="c.LastErrorAt" /> <span>@c.LastError</span> }</td></tr> }
-    </tbody></table>
-</section>
-<section class="panel">
-    <header class="panel__head"><h2>Job history (14 days)</h2></header>
-    <table class="t jobs"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
-    @foreach (var j in _jobs)
+    @{ var ran = _cursors.Where(c => c.LastSuccessAt is not null || c.LastErrorAt is not null).ToList();
+       var never = _cursors.Count - ran.Count;
+       var prs = ran.Where(c => c.Key.StartsWith("prs:", StringComparison.Ordinal)).ToList();
+       var other = ran.Where(c => !c.Key.StartsWith("prs:", StringComparison.Ordinal)).ToList(); }
+    <header class="panel__head"><h2>Sources</h2>@if (never > 0) { <span class="panel__meta">@never never-run cursor@(never == 1 ? "" : "s") hidden</span> }</header>
+    <div class="table-wrap">
+    <table class="t compact"><thead><tr><th>Cursor</th><th>Last success</th><th>Last error</th></tr></thead><tbody>
+    @foreach (var c in other) { @CursorRow(c) }
+    @if (prs.Count > 0)
     {
-        <tr><td>@j.Type <span class="tone-muted text-sm">@RepoName(j.Payload)</span></td>
-            <td><span class="pill pill--@(j.Status == JobStatus.Succeeded ? "ok" : j.Status == JobStatus.Failed ? "bad" : "info")">@j.Status</span></td>
-            <td><Ago At="j.StartedAt ?? j.CreatedAt" /></td><td class="num">@(j.DurationMs is { } d ? $"{d / 1000.0:0.#}s" : "—")</td>
-            <td class="num">@j.ApiCalls</td><td class="num">@j.TstuUsed.ToString("0.#")</td><td class="text-sm jobmsg @(j.Error is null ? "" : "err")"><div title="@(j.Error ?? j.Summary)">@(j.Error ?? j.Summary)</div></td></tr>
+        var prsErr = prs.Count(c => c.LastErrorAt > c.LastSuccessAt);
+        <tr>
+            <td class="nowrap"><button class="clamp-toggle" @onclick="() => _showPrs = !_showPrs">@(_showPrs ? "▾" : "▸") <span class="mono">prs:*</span> (@prs.Count repos)</button></td>
+            <td class="nowrap">oldest <Ago At="prs.Min(c => c.LastSuccessAt)" /></td>
+            <td class="@(prsErr > 0 ? "tone-bad" : "tone-muted") text-sm">@(prsErr > 0 ? $"{prsErr} failing" : "no current errors")</td>
+        </tr>
+        @if (_showPrs) { @foreach (var c in prs) { @CursorRow(c) } }
     }
     </tbody></table>
+    </div>
+</section>
+<section class="panel">
+    <header class="panel__head"><h2>Job history <span class="kpi__window">14 d</span></h2><span class="panel__meta">consecutive successful runs of the same type are folded</span></header>
+    <div class="table-wrap">
+    <table class="t compact jobs"><thead><tr><th>Type</th><th>Status</th><th>Started</th><th class="num">Duration</th><th class="num">Calls</th><th class="num">TSTU</th><th>Summary / error</th></tr></thead><tbody>
+    @foreach (var (j, n) in Folded())
+    {
+        var msg = Fmt.Msg(j.Error ?? j.Summary);
+        <tr><td class="nowrap">@j.Type @if (n > 1) { <span class="pill pill--count" title="@n consecutive successful runs, latest shown">×@n</span> } <span class="tone-muted text-sm">@RepoName(j.Payload)</span></td>
+            <td class="nowrap"><span class="pill pill--@(j.Status == JobStatus.Succeeded ? "ok" : j.Status == JobStatus.Failed ? "bad" : "info")">@j.Status</span></td>
+            <td class="nowrap"><Ago At="j.StartedAt ?? j.CreatedAt" /></td><td class="num">@(j.DurationMs is { } d ? $"{d / 1000.0:0.#} s" : "—")</td>
+            <td class="num">@j.ApiCalls</td><td class="num">@j.TstuUsed.ToString("0.#")</td><td class="text-sm jobmsg @(j.Error is null ? "" : "err")"><div class="clamp-2" title="@msg">@msg</div></td></tr>
+    }
+    </tbody></table>
+    </div>
 </section>
 </div>
 
@@ -62,6 +81,27 @@
         _jobs = await db.Jobs.AsNoTracking().OrderByDescending(j => j.Id).Take(150).ToListAsync();
         _cursors = await db.SyncCursors.AsNoTracking().OrderBy(c => c.Key).ToListAsync();
         _repos = await db.Repos.AsNoTracking().ToDictionaryAsync(r => r.Id, r => r.Name);
+    }
+
+    private bool _showPrs;
+
+    private RenderFragment CursorRow(SyncCursor c) => __builder =>
+    {
+        var err = Fmt.Msg(c.LastError);
+        <tr><td class="mono text-sm nowrap">@CursorName(c.Key)</td><td class="nowrap"><Ago At="c.LastSuccessAt" /></td>
+            <td class="text-sm @(c.LastErrorAt > c.LastSuccessAt ? "tone-bad" : "tone-muted")">@if (c.LastErrorAt is not null) { <Ago At="c.LastErrorAt" /> <div class="clamp-2" title="@err">@err</div> }</td></tr>
+    };
+
+    private IEnumerable<(Job Job, int Count)> Folded()
+    {
+        Job? head = null; var n = 0;
+        foreach (var j in _jobs)
+        {
+            if (head is not null && j.Status == JobStatus.Succeeded && head.Status == JobStatus.Succeeded && j.Type == head.Type && j.Payload == head.Payload) { n++; continue; }
+            if (head is not null) yield return (head, n);
+            head = j; n = 1;
+        }
+        if (head is not null) yield return (head, n);
     }
 
     private string RepoName(string? id) => id is null ? "" : _repos.GetValueOrDefault(id, id);

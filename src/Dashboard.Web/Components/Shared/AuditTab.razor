@@ -17,35 +17,7 @@
 @if (latest is null) { <div class="empty">No completed audit yet.</div> }
 else
 {
-    <div class="grid-2">
-        <section class="panel">
-            <header class="panel__head"><h2>Latest audit</h2><span class="panel__meta">@Dashboard.Web.Services.Fmt.ShortSha(latest.Sha) · <Ago At="latest.CompletedAt" /> · @latest.Engine @latest.Model · rubric @latest.RubricVersion @(latest.Votes > 1 ? $"· {latest.Votes} votes" : "") @if (latest.IsBaseline) { <span class="pill pill--info" title="Model, rubric or prompt changed — not compared with earlier audits">baseline</span> }</span></header>
-            <p><b>Architecture:</b> <span class="pill pill--info">@latest.ArchitectureStyle</span></p>
-            @if (Result(latest) is { } r)
-            {
-                <p class="text-sm">@r.ArchitectureRationale</p>
-                @if (r.ArchitectureEvidence.Count > 0) { <div class="text-sm tone-muted">Evidence: @string.Join(", ", r.ArchitectureEvidence.Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")))</div> }
-                <h3>Summary</h3><p>@r.Summary</p>
-                @if (r.AzureDependencies.Count > 0) { <p><b>Azure dependencies:</b> @string.Join(", ", r.AzureDependencies)</p> }
-            }
-        </section>
-        <section class="panel">
-            <header class="panel__head"><h2>Since previous audit</h2></header>
-            @{
-                var prev = Detail.Audits.Where(a => a.Status == AuditStatus.Succeeded && a.Id != latest.Id).FirstOrDefault();
-                var newCount = Detail.Findings.Count(x => x.State is { } s && prev is not null && s.FirstSeen > prev.CompletedAt);
-                var openCount = Detail.Findings.Count(x => x.State?.Status is FindingStatus.New or FindingStatus.Accepted);
-            }
-            <div class="kpi-row">
-                <div class="kpi"><div class="kpi__label">Open findings</div><div class="kpi__value">@openCount</div></div>
-                <div class="kpi"><div class="kpi__label">New since previous</div><div class="kpi__value">@(prev is null ? "—" : newCount.ToString())</div></div>
-                <div class="kpi"><div class="kpi__label">Checks passing</div><div class="kpi__value good">@Detail.Findings.Count(x => x.Finding.Result == CheckResult.Pass)</div></div>
-            </div>
-            @if (latest.IsBaseline) { <p class="text-sm tone-muted">This audit is a new baseline (model/rubric/prompt changed); "new" counts start from here.</p> }
-        </section>
-    </div>
-
-    <section class="panel mt-4">
+    <section class="panel mb-4">
         <header class="panel__head"><h2>Checks &amp; findings</h2><span class="panel__meta"><label><input type="checkbox" @bind="_hidePass" /> hide passing</label></span></header>
         <div class="table-wrap">
         <table class="t findings">
@@ -79,6 +51,35 @@ else
         </table>
         </div>
     </section>
+    <div class="grid-2">
+        <section class="panel">
+            <header class="panel__head"><h2>Latest audit</h2><span class="panel__meta">@Dashboard.Web.Services.Fmt.ShortSha(latest.Sha) · <Ago At="latest.CompletedAt" /> · @latest.Engine @latest.Model · rubric @latest.RubricVersion @(latest.Votes > 1 ? $"· {latest.Votes} votes" : "") @if (latest.IsBaseline) { <span class="pill pill--info" title="Model, rubric or prompt changed — not compared with earlier audits">baseline</span> }</span></header>
+            <p><b>Architecture:</b> <span class="pill pill--info">@latest.ArchitectureStyle</span></p>
+            @if (Result(latest) is { } r)
+            {
+                <p class="text-sm prose clamp-3 is-click @(_openRationale ? "is-open" : "")" @onclick="() => _openRationale = !_openRationale" title="Click to expand">@r.ArchitectureRationale</p>
+                @if (r.ArchitectureEvidence.Count > 0) { <div class="text-sm tone-muted">Evidence: @string.Join(", ", r.ArchitectureEvidence.Select(e => e.Path + (e.Line is { } l ? $":{l}" : "")))</div> }
+                <h3>Summary</h3><p class="prose clamp-3 @(_openSummary ? "is-open" : "")">@r.Summary</p>
+                <button class="clamp-toggle" @onclick="() => _openSummary = !_openSummary">@(_openSummary ? "less" : "more")</button>
+                @if (r.AzureDependencies.Count > 0) { <p><b>Azure dependencies:</b> @string.Join(", ", r.AzureDependencies)</p> }
+            }
+        </section>
+        <section class="panel">
+            <header class="panel__head"><h2>Since previous audit</h2></header>
+            @{
+                var prev = Detail.Audits.Where(a => a.Status == AuditStatus.Succeeded && a.Id != latest.Id).FirstOrDefault();
+                var newCount = Detail.Findings.Count(x => x.State is { } s && prev is not null && s.FirstSeen > prev.CompletedAt);
+                var openCount = Detail.Findings.Count(x => x.State?.Status is FindingStatus.New or FindingStatus.Accepted);
+            }
+            <div class="kpi-row">
+                <div class="kpi"><div class="kpi__label">Open findings</div><div class="kpi__value">@openCount</div></div>
+                <div class="kpi"><div class="kpi__label">New since previous</div><div class="kpi__value">@(prev is null ? "—" : newCount.ToString())</div></div>
+                <div class="kpi"><div class="kpi__label">Checks passing</div><div class="kpi__value">@Detail.Findings.Count(x => x.Finding.Result == CheckResult.Pass)</div></div>
+            </div>
+            @if (latest.IsBaseline) { <p class="text-sm tone-muted">This audit is a new baseline (model/rubric/prompt changed); "new" counts start from here.</p> }
+        </section>
+    </div>
+
 }
 
 <section class="panel mt-4">
@@ -106,6 +107,7 @@ else
     [Inject] ConfigService Config { get; set; } = default!;
     private bool _queued;
     private bool _hidePass = true;
+    private bool _openSummary, _openRationale;
     private readonly Dictionary<string, string?> _reason = new();
 
     private async Task AuditNow()

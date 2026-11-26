@@ -7,16 +7,20 @@
 <header class="page-head">
     <div class="page-head__text">
         <h1>Weekly digest</h1>
-        <p class="page-head__headline">for retros and sprint review — no per-person data</p>
+        <p class="page-head__headline">For retros and sprint review — team-level only, no per-person data.</p>
     </div>
     <div class="page-head__actions">
-        <button class="btn btn--secondary" @onclick="Copy">Copy Markdown</button>
-    <button class="btn btn--secondary" @onclick="Download">Download .md</button>
-    <button class="btn btn--primary" @onclick="Brief" disabled="@_busy">@(_busy ? "Writing…" : "Write brief with Copilot")</button>
+        <button class="btn btn--secondary btn--sm" @onclick="Copy">@(_copied ? "Copied ✓" : "Copy Markdown")</button>
+        <button class="btn btn--secondary btn--sm" @onclick="Download">Download .md</button>
+        <button class="btn btn--primary btn--sm" @onclick="Brief" disabled="@_busy">@(_busy ? "Writing…" : "Write brief with Copilot")</button>
     </div>
 </header>
-@if (_brief is not null) { <section class="panel mb-4"><header class="panel__head"><h2>Brief</h2></header><pre class="box">@_brief</pre></section> }
-<section class="panel"><pre class="box is-full">@_digest</pre></section>
+@if (_brief is not null) { <section class="panel mb-4"><header class="panel__head"><h2>Brief</h2></header><div class="md">@((MarkupString)MiniMarkdown.ToHtml(_brief))</div></section> }
+<section class="panel">
+    @if (string.IsNullOrEmpty(_digest)) { <div class="empty">Loading…</div> }
+    else { <article class="md">@((MarkupString)MiniMarkdown.ToHtml(_digest))</article> }
+    <details class="mt-4"><summary>Show raw Markdown</summary><pre class="box is-full mt-2">@_digest</pre></details>
+</section>
 
 @code {
     private string _digest = "";
@@ -24,7 +28,8 @@
     private bool _busy;
     protected override TimeSpan RefreshEvery => TimeSpan.FromMinutes(5);
     protected override async Task LoadAsync() => _digest = await WeeklySvc.DigestAsync();
-    private async Task Copy() { try { await JS.InvokeAsync<bool>("dash.copy", _digest); } catch (JSException) { } }
+    private bool _copied;
+    private async Task Copy() { try { _copied = await JS.InvokeAsync<bool>("dash.copy", _digest); } catch (JSException) { } }
     private async Task Download() { try { await JS.InvokeVoidAsync("dash.download", $"weekly-{Now:yyyy-MM-dd}.md", _digest); } catch (JSException) { } }
     private async Task Brief()
     {

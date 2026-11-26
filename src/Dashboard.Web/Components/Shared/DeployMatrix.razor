@@ -1,0 +1,91 @@
+@* Components × environments grid. Rows with identical versions are grouped; "= same" = same version as the cell to the left. *@
+@{ var groups = Groups().ToList(); }
+@if (groups.Count == 0) { <div class="empty">@(Hidden > 0 ? $"All {Hidden} rows are on the same version everywhere." : "No deployments synced yet.")</div> }
+else
+{
+    <div class="table-wrap is-scroll">
+    <table class="t compact matrix">
+        <thead><tr><th class="sticky-col">@(ByRepo ? "Repo" : "Component")</th>@foreach (var e in Environments) { <th><span class="env-dot @Fmt.EnvClass(e, Config.Current)"></span>@e</th> }</tr></thead>
+        <tbody>
+        @foreach (var g in groups)
+        {
+            <tr>
+                <td class="sticky-col nowrap">
+                    @if (ByRepo)
+                    {
+                        <a href="repo/@Uri.EscapeDataString(g.RepoName)">@g.RepoName</a>
+                        @if (g.Components.Count == 1) { <div class="text-sm tone-muted">@g.Components[0]</div> }
+                        else if (g.Components.Count > 1) { <div class="text-sm tone-muted" title="@string.Join("\n", g.Components)">@g.Components.Count components</div> }
+                    }
+                    else
+                    {
+                        @(g.Components.Count == 0 ? "(repo)" : g.Components[0])
+                        @if (g.Components.Count > 1) { <div class="text-sm tone-muted" title="@string.Join("\n", g.Components)">+@(g.Components.Count - 1) more on the same versions</div> }
+                    }
+                </td>
+                @{ string? prev = null; }
+                @foreach (var e in Environments)
+                {
+                    var cell = g.Row.Cells.GetValueOrDefault(e);
+                    var d = cell?.Latest;
+                    var same = d is not null && prev is not null && d.Version == prev;
+                    <td class="ver-cell @(d is null && cell?.InProgress is null ? "is-empty" : "") @(same ? "is-same" : "") @(cell?.Drift == true ? "is-drift" : "")" title="@d?.Version">
+                        @if (d is null && cell?.InProgress is null) { <span>—</span> }
+                        else
+                        {
+                            @if (d is not null)
+                            {
+                                var (br, num) = Fmt.ShortVer(d.Version, g.RepoName);
+                                <div class="ver-cell__main">
+                                    @if (same) { <span>= same</span> }
+                                    else
+                                    {
+                                        @if (br is not null && !Fmt.IsMainBranch(br)) { <span class="pill pill--ref is-nondefault" title="@br">@br</span> }
+                                        <span class="ver">@num</span>
+                                        @if (cell!.Drift) { <span class="tone-warn" title="sim and prod run different versions">⚠</span> }
+                                    }
+                                </div>
+                                <div class="ver-cell__meta"><Ago At="d.FinishTime" />@if (cell!.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</div>
+                            }
+                            @if (cell!.InProgress is { } ip) { <span class="pill pill--info"><span class="dot dot--info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying")</span> }
+                        }
+                    </td>
+                    prev = d?.Version ?? prev;
+                }
+            </tr>
+        }
+        </tbody>
+    </table>
+    </div>
+    @if (Hidden > 0) { <div class="empty">@Hidden row@(Hidden == 1 ? "" : "s") hidden: same version in every environment.</div> }
+}
+@code {
+    [Inject] ConfigService Config { get; set; } = default!;
+    [Parameter, EditorRequired] public IEnumerable<MatrixRow> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<string> Environments { get; set; } = [];
+    /// <summary>true: first column is the repo (Now); false: the component (repo page).</summary>
+    [Parameter] public bool ByRepo { get; set; } = true;
+    /// <summary>Hide rows whose every environment runs the same version (and nothing is in progress).</summary>
+    [Parameter] public bool ChangesOnly { get; set; }
+
+    private sealed record Group(string RepoName, List<string> Components, MatrixRow Row);
+    private int Hidden;
+
+    private bool AllSame(MatrixRow r) =>
+        r.Cells.Values.All(c => c.InProgress is null && !c.Drift)
+        && r.Cells.Values.Where(c => c.Latest is not null).Select(c => c.Latest!.Version).Distinct().Count() <= 1;
+
+    // One row per repo when all its components are on the same versions; otherwise one row per distinct version set.
+    private IEnumerable<Group> Groups()
+    {
+        Hidden = 0;
+        var all = new List<Group>();
+        foreach (var repo in Rows.GroupBy(r => r.RepoName))
+            foreach (var same in repo.GroupBy(r => string.Join("|", Environments.Select(e => r.Cells.GetValueOrDefault(e)?.Latest?.Version))))
+                all.Add(new Group(repo.Key, same.Where(r => r.Component is not null).Select(r => r.Component!.Name).ToList(), same.First()));
+        if (!ChangesOnly) return all;
+        var shown = all.Where(g => !AllSame(g.Row)).ToList();
+        Hidden = all.Count - shown.Count;
+        return shown;
+    }
+}

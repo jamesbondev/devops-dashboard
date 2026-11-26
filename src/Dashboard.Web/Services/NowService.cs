@@ -306,4 +306,33 @@ public static class Fmt
     /// <summary>Error text fit for a team-visible page: no ANSI colour codes, no person names.</summary>
     public static string Msg(string? m) => m is null ? "" : CancelledBy.Replace(Ansi.Replace(m, ""), "$1 a user.");
     public static string ShortSha(string? sha) => sha is null ? "—" : sha.Length > 8 ? sha[..8] : sha;
+
+    public static bool IsMainBranch(string? br) => br is "main" or "master";
+
+    /// <summary>"interest_accrual-release_main_20261124.4" -> ("main", "20261124.4").</summary>
+    public static (string? Branch, string Num) ShortVer(string? v, string repo)
+    {
+        if (string.IsNullOrEmpty(v)) return (null, "");
+        var s = v;
+        static string Norm(string x) => x.Replace('-', '_').ToLowerInvariant();
+        if (Norm(s).StartsWith(Norm(repo), StringComparison.Ordinal)) s = s[repo.Length..].TrimStart('-', '_');
+        foreach (var p in new[] { "release_", "release-" }) if (s.StartsWith(p, StringComparison.OrdinalIgnoreCase)) s = s[p.Length..];
+        var i = s.LastIndexOf('_');
+        if (i <= 0) return (null, s);
+        var br = s[..i];
+        if (br.Length > 18) br = br[..16] + "…";
+        return (br, s[(i + 1)..]);
+    }
+
+    /// <summary>CSS class for an environment's tier colour (env-dev / env-staging / env-sim / env-prod).</summary>
+    public static string EnvClass(string envName, Dashboard.Core.Configuration.DashboardConfig cfg)
+    {
+        var e = cfg.Environments.FirstOrDefault(x => x.Name == envName);
+        return e?.Tier switch
+        {
+            Dashboard.Core.Configuration.EnvironmentTier.Production => envName.Contains("sim", StringComparison.OrdinalIgnoreCase) ? "env-sim" : "env-prod",
+            Dashboard.Core.Configuration.EnvironmentTier.Staging => "env-staging",
+            _ => "env-dev",
+        };
+    }
 }
