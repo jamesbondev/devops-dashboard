@@ -60,26 +60,37 @@ else if (_model is { } m)
                     {
                         <div class="table-wrap">
                         <table class="t matrix">
-                            <thead><tr><th>Repo / component</th>@foreach (var e in m.Environments) { <th>@e</th> }</tr></thead>
+                            <thead><tr><th>Repo</th>@foreach (var e in m.Environments) { <th>@e</th> }</tr></thead>
                             <tbody>
-                            @foreach (var row in m.Matrix.Where(r => !_matrixProdOnly || r.Cells.Values.Any(c => c.Latest?.Tier == EnvironmentTier.Production)))
+                            @foreach (var g in MatrixGroups(m))
                             {
                                 <tr>
-                                    <td><a href="repo/@Uri.EscapeDataString(row.RepoName)">@row.RepoName</a>
-                                        @if (row.Component is { } c) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")">@c.Name</span> }</td>
+                                    <td class="mrepo"><a href="repo/@Uri.EscapeDataString(g.RepoName)">@g.RepoName</a>
+                                        @if (g.Components.Count == 1) { <div class="small muted">@g.Components[0]</div> }
+                                        else if (g.Components.Count > 1) { <div class="small muted" title="@string.Join("\n", g.Components)">@g.Components.Count components</div> }</td>
+                                    @{ string? prev = null; }
                                     @foreach (var e in m.Environments)
                                     {
-                                        var cell = row.Cells.GetValueOrDefault(e);
+                                        var cell = g.Row.Cells.GetValueOrDefault(e);
+                                        var d = cell?.Latest;
+                                        var same = d is not null && prev is not null && d.Version == prev;
                                         <td class="cell">
-                                            @if (cell is null || (cell.Latest is null && cell.InProgress is null)) { <span class="muted">—</span> }
+                                            @if (d is null && cell?.InProgress is null) { <span class="muted">—</span> }
                                             else
                                             {
-                                                <div class="cellv @(cell.Drift ? "drift" : "")">
-                                                    @if (cell.Latest is { } d) { <span class="ver" title="@d.SourceVersion">@d.Version @(cell.Drift ? "⚠" : "")</span><span class="age"><Ago At="d.FinishTime" />@if (cell.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</span> }
-                                                    @if (cell.InProgress is { } ip) { <span class="badge info"><span class="dot info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying") @ip.Version</span> }
+                                                <div class="cellv @(cell!.Drift ? "drift" : "") @(same ? "same" : "")" title="@d?.Version">
+                                                    @if (d is not null)
+                                                    {
+                                                        var (br, num) = ShortVer(d.Version, g.RepoName);
+                                                        @if (same) { <span class="ver">= same</span> }
+                                                        else { <span class="ver">@if (br is not null) { <span class="br @(IsMain(br) ? "" : "feat")">@br</span> }@num @(cell.Drift ? "⚠" : "")</span> }
+                                                        <span class="age"><Ago At="d.FinishTime" />@if (cell.CommitsNotDeployed > 0) { <span title="commits merged since this build"> · +@cell.CommitsNotDeployed</span> }</span>
+                                                    }
+                                                    @if (cell.InProgress is { } ip) { <span class="badge info"><span class="dot info pulse"></span> @(ip.State == "pending" ? "waiting" : "deploying")</span> }
                                                 </div>
                                             }
                                         </td>
+                                        prev = d?.Version ?? prev;
                                     }
                                 </tr>
                             }
@@ -138,6 +149,34 @@ else if (_model is { } m)
 }
 
 @code {
+    private sealed record MatrixGroup(string RepoName, List<string> Components, MatrixRow Row);
+
+    // One row per repo when all its components are on the same versions; otherwise one row per distinct version set.
+    private IEnumerable<MatrixGroup> MatrixGroups(NowModel m)
+    {
+        var rows = m.Matrix.Where(r => !_matrixProdOnly || r.Cells.Values.Any(c => c.Latest?.Tier == EnvironmentTier.Production));
+        foreach (var repo in rows.GroupBy(r => r.RepoName))
+            foreach (var same in repo.GroupBy(r => string.Join("|", m.Environments.Select(e => r.Cells.GetValueOrDefault(e)?.Latest?.Version))))
+                yield return new MatrixGroup(repo.Key, same.Where(r => r.Component is not null).Select(r => r.Component!.Name).ToList(), same.First());
+    }
+
+    private static bool IsMain(string br) => br is "main" or "master";
+
+    // "interest_accrual-release_main_20261124.4" -> ("main", "20261124.4")
+    private static (string? Branch, string Num) ShortVer(string? v, string repo)
+    {
+        if (string.IsNullOrEmpty(v)) return (null, "");
+        var s = v;
+        var norm = (string x) => x.Replace('-', '_').ToLowerInvariant();
+        if (norm(s).StartsWith(norm(repo))) s = s[repo.Length..].TrimStart('-', '_');
+        foreach (var p in new[] { "release_", "release-" }) if (s.StartsWith(p, StringComparison.OrdinalIgnoreCase)) s = s[p.Length..];
+        var i = s.LastIndexOf('_');
+        if (i <= 0) return (null, s);
+        var br = s[..i];
+        if (br.Length > 18) br = br[..16] + "…";
+        return (br, s[(i + 1)..]);
+    }
+
     private NowModel? _model;
     private bool _showAll;
     private bool _matrixProdOnly;
