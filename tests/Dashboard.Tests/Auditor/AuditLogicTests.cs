@@ -196,7 +196,7 @@ public sealed class AuditOutputValidatorTests
         Summary = "ok",
         Checks =
         [
-            new LlmCheckOutcome { CheckId = "ARCH-002", Result = "fail", Explanation = "x", Confidence = 0.8, Evidence = [new LlmEvidence { Path = "a.cs" }] },
+            new LlmCheckOutcome { CheckId = "ARCH-002", Result = "fail", Explanation = "x", Confidence = 0.8, Evidence = [new LlmCheckEvidence { Path = "a.cs" }] },
             new LlmCheckOutcome { CheckId = "MSG-001", Result = "na", Explanation = "no messaging", Confidence = 0.5 },
         ],
     };
@@ -344,5 +344,16 @@ public sealed class ErrorTextTests
     {
         var s = Dashboard.Auditor.Engines.ErrorText.Summarise(new InvalidOperationException(new string('x', 2000)));
         Assert.True(s.Length <= 501);
+    }
+}
+
+public sealed class AuditSchemaTests
+{
+    [Fact]
+    public void Output_schema_has_no_refs()
+    {
+        var schema = System.Text.Json.Schema.JsonSchemaExporter.GetJsonSchemaAsNode(
+            System.Text.Json.JsonSerializerOptions.Web, typeof(LlmAuditOutput)).ToJsonString();
+        Assert.DoesNotContain("$ref", schema);
     }
 }

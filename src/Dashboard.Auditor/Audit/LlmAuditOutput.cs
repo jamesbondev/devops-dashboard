@@ -45,13 +45,13 @@ public sealed class LlmCheckOutcome
     public string? Recommendation { get; set; }
 
     [Description("Files you actually opened that support the outcome. Required for fail and partial.")]
-    public List<LlmEvidence> Evidence { get; set; } = [];
+    public List<LlmCheckEvidence> Evidence { get; set; } = [];
 
     [Description("0.0 - 1.0")]
     public double Confidence { get; set; }
 }
 
-public sealed class LlmEvidence
+public class LlmEvidence
 {
     [Description("Path relative to the repository root, forward slashes.")]
     public string Path { get; set; } = "";
@@ -61,6 +61,10 @@ public sealed class LlmEvidence
 
     public string? Note { get; set; }
 }
+
+// Distinct type for check evidence: reusing LlmEvidence makes the schema generator emit a $ref
+// ("#/properties/architectureEvidence/items") that the model API rejects.
+public sealed class LlmCheckEvidence : LlmEvidence;
 
 public sealed class LlmComponent
 {
@@ -193,6 +197,6 @@ public static class AuditOutputValidator
         return result;
     }
 
-    private static List<Evidence> Map(List<LlmEvidence>? evidence) =>
+    private static List<Evidence> Map(IEnumerable<LlmEvidence>? evidence) =>
         (evidence ?? []).Select(e => new Evidence { Path = e.Path ?? "", Line = e.Line, Note = e.Note }).ToList();
 }
