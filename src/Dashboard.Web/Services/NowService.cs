@@ -135,7 +135,10 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
         }
 
         // Running / queued
-        var active = await db.Runs.AsNoTracking().Where(r => repoIds.Contains(r.RepoId) && r.Status != "completed" && !r.DeletedInAdo).OrderBy(r => r.QueueTime).ToListAsync(ct);
+        // Ignore zombies: ADO can leave a run in "cancelling" (or queued) forever, e.g. one from 2024 whose agent is long gone.
+        var zombieCutoff = now.AddDays(-7);
+        var active = (await db.Runs.AsNoTracking().Where(r => repoIds.Contains(r.RepoId) && r.Status != "completed" && !r.DeletedInAdo).OrderBy(r => r.QueueTime).ToListAsync(ct))
+            .Where(r => r.QueueTime >= zombieCutoff && !(r.Status == "cancelling" && (r.StartTime ?? r.QueueTime) < now.AddHours(-1))).ToList();
         var activeIds = active.Select(r => r.Id).ToList();
         var activeRecords = await db.TimelineRecords.AsNoTracking()
             .Where(t => activeIds.Contains(t.RunId) && !t.IsPreviousAttempt && (t.Type == "Stage" || t.Type.StartsWith("Checkpoint")))
