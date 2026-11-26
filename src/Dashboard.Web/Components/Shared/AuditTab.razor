@@ -66,7 +66,7 @@ else
                             @if (s2.Status == FindingStatus.New) { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.Accepted, null)">Accept</button> }
                             @if (s2.Status != FindingStatus.Dismissed)
                             {
-                                <select @bind="_reason[s2.Fingerprint]"><option value="">dismiss…</option><option>won't fix</option><option>false positive</option><option>not applicable</option></select>
+                                <select value="@(_reason.GetValueOrDefault(s2.Fingerprint) ?? "")" @onchange="e => _reason[s2.Fingerprint] = e.Value?.ToString()"><option value="">dismiss…</option><option>won't fix</option><option>false positive</option><option>not applicable</option></select>
                                 <button disabled="@(string.IsNullOrEmpty(_reason.GetValueOrDefault(s2.Fingerprint)))" @onclick="() => Set(s2.Fingerprint, FindingStatus.Dismissed, _reason.GetValueOrDefault(s2.Fingerprint))">Dismiss</button>
                             }
                             else { <button @onclick="() => Set(s2.Fingerprint, FindingStatus.New, null)">Reopen</button> }
