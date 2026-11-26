@@ -18,15 +18,15 @@ else
     <div class="row" style="margin-bottom:.25rem">
         <h1 style="margin:0">@h.Repo.Name</h1>
         <TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" />
-        <span class="muted">@h.Repo.Type</span>
+        <span class="muted" title="@(h.Type != h.Repo.Type ? "from repos config / name pattern" : "")">@RepoTypes.Label(h.Type)</span>
         @if (h.Dormant) { <span class="badge">dormant</span> }
         @foreach (var c in h.Components) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")" title="@c.SourcePath (@c.Source)">@c.Name</span> }
         <span class="grow"></span>
         <AdoLink Href="@h.Repo.WebUrl">Repo in ADO ↗</AdoLink>
         <button @onclick="TogglePin">@(h.Repo.Pinned ? "Unpin" : "📌 Pin")</button>
         <button @onclick="ToggleMute">@(h.Repo.Muted ? "Unmute" : "Mute")</button>
-        <select value="@h.Repo.Type" @onchange="ChangeType" title="Repo type selects the rule set">
-            <option>Service</option><option>Library</option><option>Infra</option>
+        <select value="@h.Type" @onchange="ChangeType" title="Repo type selects the rule set (repos.types in config wins; name patterns apply while this is Service)">
+            <option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option>
         </select>
         <a class="btn" href="@($"export/repo/{Uri.EscapeDataString(h.Repo.Name)}.md")" target="_blank">Export .md</a>
     </div>

@@ -503,3 +503,45 @@ public class GateChecksTests
         Assert.True(StageClassifier.IsGate("Automated Approval Gate 2", null, B.Config().Pipelines));
     }
 }
+
+public class RepoTypeTests
+{
+    [Theory]
+    [InlineData("end2end_payments", RepoType.E2E)]
+    [InlineData("end2end-interest", RepoType.E2E)]
+    [InlineData("interest-e2e", RepoType.E2E)]
+    [InlineData("interest-load-tests", RepoType.Load)]
+    [InlineData("payments_load", RepoType.Load)]
+    [InlineData("interest_outbox", RepoType.Service)]
+    [InlineData("download-service", RepoType.Service)]   // "load" only as a whole word
+    [InlineData("payloads", RepoType.Service)]
+    public void Name_patterns_detect_test_repos(string name, RepoType expected) =>
+        Assert.Equal(expected, RepoTypes.Resolve(name, RepoType.Service, B.Config()));
+
+    [Fact]
+    public void Config_type_wins_then_repo_page_then_patterns()
+    {
+        var cfg = B.Config();
+        cfg.Repos.Types.Add(new RepoTypeOverride { Name = "end2end_odd", Type = "Service" });
+        cfg.Repos.Types.Add(new RepoTypeOverride { Name = "perf-suite", Type = "load" });
+        Assert.Equal(RepoType.Service, RepoTypes.Resolve("end2end_odd", RepoType.Service, cfg));
+        Assert.Equal(RepoType.Load, RepoTypes.Resolve("perf-suite", RepoType.Service, cfg));
+        Assert.Equal(RepoType.Library, RepoTypes.Resolve("end2end_shared", RepoType.Library, cfg));
+    }
+
+    [Fact]
+    public void Invalid_repo_type_in_config_is_rejected()
+    {
+        var bad = ConfigLoader.Parse("repos:\n  types:\n    - { name: x, type: Banana }\n");
+        Assert.Contains(bad.Errors, e => e.Contains("repos.types"));
+    }
+
+    [Fact]
+    public void Test_repos_skip_deploy_and_test_project_rules()
+    {
+        var engine = new RuleEngine(B.Config());
+        var r = engine.Evaluate(new RepoHealthInput { Type = RepoType.E2E, PipelineCount = 1, DefaultBranchCiRuns = 5, FactsAvailable = true, EveryDeployableHasTests = false });
+        Assert.Equal(RuleStatus.NotApplicable, r.Outcomes.Single(o => o.RuleId == "DEP-001").Status);
+        Assert.Equal(RuleStatus.NotApplicable, r.Outcomes.Single(o => o.RuleId == "TST-001").Status);
+    }
+}

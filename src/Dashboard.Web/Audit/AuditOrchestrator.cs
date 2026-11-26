@@ -159,7 +159,7 @@ public sealed class AuditOrchestrator(
                 var teamStandards = LoadTeamStandards(config.ResolvePath(cfg.Audit.RubricPath));
                 var started = await auditor.StartAsync(new AuditRequest
                 {
-                    AuditId = run.Id, RepoName = repo.Name, Sha = sha, WorktreePath = wt.Path, FactsJson = factsJson, Checks = judgement,
+                    AuditId = run.Id, RepoName = repo.Name, RepoType = Dashboard.Core.Configuration.RepoTypes.Resolve(repo.Name, repo.Type, cfg).ToString(), Sha = sha, WorktreePath = wt.Path, FactsJson = factsJson, Checks = judgement,
                     DiffSummary = wt.DiffSummary, Model = cfg.Audit.Model, ReasoningEffort = cfg.Audit.ReasoningEffort,
                     TimeoutMinutes = cfg.Audit.TimeoutMinutes, Votes = cfg.Audit.Votes, TeamStandards = teamStandards,
                 }, ct);

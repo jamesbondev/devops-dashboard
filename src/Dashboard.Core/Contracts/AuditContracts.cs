@@ -25,6 +25,8 @@ public sealed class AuditRequest
 {
     public string AuditId { get; set; } = "";
     public string RepoName { get; set; } = "";
+    /// <summary>Effective repo type (Service, Library, Infra, E2E, Load).</summary>
+    public string RepoType { get; set; } = "Service";
     public string Sha { get; set; } = "";
     /// <summary>Absolute path of the immutable worktree, as mounted inside the auditor container.</summary>
     public string WorktreePath { get; set; } = "";

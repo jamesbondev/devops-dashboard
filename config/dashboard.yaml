@@ -92,8 +92,17 @@ rules:
   - { id: BLD-003,  tier: Gold,   threshold: 0.95 }
   - { id: PR-002,   tier: Gold,   threshold: 5 }      # oldest active PR, working days
   - { id: DEP-001,  tier: Gold,   threshold: 30, repoTypes: [Service] }
-  - { id: TST-001,  tier: Gold }
+  - { id: TST-001,  tier: Gold,   repoTypes: [Service, Library, Infra] }   # n/a for E2E / Load test repos
   - { id: AUD-001,  tier: Gold }
+
+repos:
+  # Test-only repos (E2E / Load): no "deployed to Production" or "test projects" tier rules, failing runs show as a
+  # low-priority "tests failing" item on Now (not "main red"), and the auditor is told what kind of repo it is.
+  # Order: types below > type chosen on the repo page > name patterns > Service.
+  e2ePatterns: ['^end2end[_-]', '(^|[_-])e2e([_-]|$)']
+  loadPatterns: ['(^|[_-])load([_-]|$)']
+  types: []
+  #  - { name: some-odd-test-repo, type: E2E }     # Service | Library | Infra | E2E | Load
 
 components:
   # Hide or add components the scanners get wrong.

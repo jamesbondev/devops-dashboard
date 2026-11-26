@@ -19,6 +19,23 @@ public sealed class DashboardConfig
     public NowViewConfig NowView { get; set; } = new();
     public PipelinesConfig Pipelines { get; set; } = new();
     public NotificationsConfig Notifications { get; set; } = new();
+    public ReposConfig Repos { get; set; } = new();
+}
+
+public sealed class ReposConfig
+{
+    /// <summary>Explicit repo types; win over everything else.</summary>
+    public List<RepoTypeOverride> Types { get; set; } = [];
+    /// <summary>Repo-name patterns for end-to-end test repos (used when the type hasn't been set on the repo page).</summary>
+    public List<string> E2EPatterns { get; set; } = ["^end2end[_-]", "(^|[_-])e2e([_-]|$)"];
+    /// <summary>Repo-name patterns for load / performance test repos.</summary>
+    public List<string> LoadPatterns { get; set; } = ["(^|[_-])load([_-]|$)"];
+}
+
+public sealed class RepoTypeOverride
+{
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "Service";
 }
 
 public sealed class AzureDevOpsConfig

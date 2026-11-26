@@ -88,6 +88,10 @@ public static class ConfigLoader
                 errors.Add($"Gate environment '{g.Name}' clashes with a deployment environment name.");
         }
         foreach (var p in c.Components.AksJobPatterns.Concat(c.Components.DatabaseJobPatterns)) CheckRegex(p, "components job patterns", errors);
+        foreach (var p in c.Repos.E2EPatterns.Concat(c.Repos.LoadPatterns)) CheckRegex(p, "repos patterns", errors);
+        foreach (var t in c.Repos.Types)
+            if (string.IsNullOrWhiteSpace(t.Name) || !Enum.TryParse<Entities.RepoType>(t.Type, ignoreCase: true, out _))
+                errors.Add($"repos.types[{t.Name}]: type must be one of {string.Join(", ", Enum.GetNames<Entities.RepoType>())}.");
         foreach (var r in c.Components.DeployRules)
         {
             if (string.IsNullOrWhiteSpace(r.Component)) errors.Add("components.deployRules[].component is required.");
@@ -162,7 +166,7 @@ public static class Defaults
         new() { Id = "BLD-003", Tier = "Gold", Threshold = 0.95 },
         new() { Id = "PR-002", Tier = "Gold", Threshold = 5 },
         new() { Id = "DEP-001", Tier = "Gold", Threshold = 30, RepoTypes = ["Service"] },
-        new() { Id = "TST-001", Tier = "Gold" },
+        new() { Id = "TST-001", Tier = "Gold", RepoTypes = ["Service", "Library", "Infra"] },
         new() { Id = "AUD-001", Tier = "Gold" },
     ];
 }

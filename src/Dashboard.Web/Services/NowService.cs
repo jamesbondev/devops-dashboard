@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Web.Services;
 
-public enum AttentionKind { ApprovalForMe = 1, GateBlocked = 2, MainRed = 3, ProductionDeployFailed = 4, StuckRelease = 5, StuckPr = 6, PrValidationFailed = 7 }
+public enum AttentionKind { ApprovalForMe = 1, GateBlocked = 2, MainRed = 3, ProductionDeployFailed = 4, StuckRelease = 5, StuckPr = 6, PrValidationFailed = 7, TestsFailing = 8 }
 
 public sealed record AttentionItem(
     AttentionKind Kind, string RepoId, string RepoName, string Title, string Detail, string? Link, DateTimeOffset Since, double Score, string? Badge = null);
@@ -78,10 +78,18 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
             var run = await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == red.StartRunId, ct);
             var pname = pipelines.TryGetValue(red.PipelineId, out var p) ? p.Name : "pipeline";
             var wall = (now - red.Start).TotalHours;
-            attention.Add(new AttentionItem(AttentionKind.MainRed, h.Repo.Id, h.Repo.Name,
-                $"main red for {Fmt.Hours(wall)}: {h.Repo.Name}",
-                $"{pname} #{run?.BuildNumber}",
-                run?.WebUrl, red.Start, 800 + Math.Min(wall, 72)));
+            // Test-only repos: a failing run usually means the environment / app under test is broken, not this
+            // repo. Low priority early warning, no notification and not in the attention badge.
+            if (h.IsTestRepo)
+                attention.Add(new AttentionItem(AttentionKind.TestsFailing, h.Repo.Id, h.Repo.Name,
+                    $"{RepoTypes.Label(h.Type)} failing for {Fmt.Hours(wall)}: {h.Repo.Name}",
+                    $"{pname} #{run?.BuildNumber} · may point at a broken environment or app",
+                    run?.WebUrl, red.Start, 100 + Math.Min(wall, 72)));
+            else
+                attention.Add(new AttentionItem(AttentionKind.MainRed, h.Repo.Id, h.Repo.Name,
+                    $"main red for {Fmt.Hours(wall)}: {h.Repo.Name}",
+                    $"{pname} #{run?.BuildNumber}",
+                    run?.WebUrl, red.Start, 800 + Math.Min(wall, 72)));
         }
 
         // ③ Failed Production deployments (recent) and ④ stuck releases

@@ -18,13 +18,13 @@
     {
         <div class="kpi"><div class="label"><TierBadge Tier="@t" /></div><div class="value">@_all.Count(h => h.Tier.Tier == t)</div><div class="sub">@_all.Count(h => h.Tier.Tier == t && h.Tier.Provisional) provisional</div></div>
     }
-    <div class="kpi"><div class="label">Main red now</div><div class="value @(_all.Any(h => h.OpenRed is not null) ? "bad" : "good")">@_all.Count(h => h.OpenRed is not null)</div></div>
-    <div class="kpi"><div class="label">Wasted minutes (flaky)</div><div class="value">@_all.Sum(h => h.WastedMinutes).ToString("0")</div><div class="sub">re-runs that later went green</div></div>
+    <div class="kpi"><div class="label">Main red now</div><div class="value @(_all.Any(h => h.OpenRed is not null && !h.IsTestRepo) ? "bad" : "good")">@_all.Count(h => h.OpenRed is not null && !h.IsTestRepo)</div>@if (_all.Count(h => h.OpenRed is not null && h.IsTestRepo) is > 0 and var tf) { <div class="sub">+@tf test repo@(tf == 1 ? "" : "s") failing</div> }</div>
+    <div class="kpi"><div class="label">Wasted minutes (flaky)</div><div class="value">@_all.Where(h => !h.IsTestRepo).Sum(h => h.WastedMinutes).ToString("0")</div><div class="sub">re-runs that later went green@(_all.Any(h => h.IsTestRepo) ? $" · test repos +{_all.Where(h => h.IsTestRepo).Sum(h => h.WastedMinutes):0}" : "")</div></div>
 </div>
 
 <div class="filters">
     <input type="search" placeholder="Filter repos…" @bind="_filter" @bind:event="oninput" />
-    <label>Type <select @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option></select></label>
+    <label>Type <select @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select></label>
     <label>Tier <select @bind="_tier"><option value="">all</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>None</option></select></label>
     <label><input type="checkbox" @bind="_changed" /> changed this week</label>
     <label><input type="checkbox" @bind="_redOnly" /> red now</label>
@@ -57,13 +57,13 @@
     @foreach (var h in Rows)
     {
         <tr>
-            <td><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a> <span class="muted small">@h.Repo.Type</span>
+            <td><a href="repo/@Uri.EscapeDataString(h.Repo.Name)"><b>@h.Repo.Name</b></a> <span class="muted small">@RepoTypes.Label(h.Type)</span>
                 @if (h.Dormant) { <span class="badge">dormant</span> } @if (h.Repo.Muted) { <span class="badge">muted</span> } @if (h.Repo.Pinned) { <span title="pinned">📌</span> }
                 <div>@foreach (var c in h.Components) { <span class="chip @(c.Kind == ComponentKind.Database ? "db" : "aks")" style="margin-right:.2rem">@c.Name</span> }</div></td>
             <td class="nowrap"><TierBadge Tier="@h.Tier.Tier" Provisional="h.Tier.Provisional" /> @TierMove(h)</td>
             <td class="gap">@if (h.Tier.NextTier is { } nt) { <span title="@string.Join("\n", h.Tier.NextTierGaps.Select(g => $"{g.RuleId} {g.Title}: {g.Display} ({g.Status})"))">@nt: @(h.Tier.NextTierGaps.Count) rule@(h.Tier.NextTierGaps.Count == 1 ? "" : "s") — @string.Join(", ", h.Tier.NextTierGaps.Take(2).Select(g => g.RuleId))</span> } else { <span class="good">top tier</span> }</td>
             <td class="num">@if (h.OpenRed is { } red) { <span class="badge bad">red @Fmt.Hours((Now - red.Start).TotalHours)</span> } else { <span class="good">●</span> }</td>
-            <td class="num @(h.MainSuccessRate < 0.9 ? "bad" : "")">@Fmt.Pct(h.MainSuccessRate) <span class="muted small">n=@h.CompletedBuildRuns</span></td>
+            <td class="num @(h.MainSuccessRate < 0.9 && !h.IsTestRepo ? "bad" : "")" title="@(h.IsTestRepo ? "Test pass rate on main (test repo)" : "")">@Fmt.Pct(h.MainSuccessRate) <span class="muted small">n=@h.CompletedBuildRuns</span></td>
             <td class="num @(h.FlakyRunRate >= 0.05 ? "warnc" : "")">@Fmt.Pct1(h.FlakyRunRate)</td>
             <td class="num">@h.WastedMinutes.ToString("0")</td>
             <td class="num">@(h.Prs.FirstReviewHours is { } fr ? $"{fr:0.#}h" : "—") <span class="muted small">@h.Prs.FirstReviewLabel n=@h.Prs.ReviewedInWindow</span></td>
@@ -108,7 +108,7 @@ else
         {
             var q = _all.Where(h => (_showMuted || !h.Repo.Muted)
                                     && (_filter.Length == 0 || h.Repo.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase))
-                                    && (_type.Length == 0 || h.Repo.Type.ToString() == _type)
+                                    && (_type.Length == 0 || h.Type.ToString() == _type)
                                     && (_tier.Length == 0 || h.Tier.Tier == _tier)
                                     && (!_redOnly || h.OpenRed is not null)
                                     && (!_changed || (h.PreviousTier is not null && h.PreviousTier != h.Tier.Tier) || h.Weekly.Count > 1 && Math.Abs((h.Weekly[^1].SuccessRate ?? 0) - (h.Weekly[^2].SuccessRate ?? 0)) > 0.1));

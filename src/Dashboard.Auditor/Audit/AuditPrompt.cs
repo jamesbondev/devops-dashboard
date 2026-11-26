@@ -19,6 +19,7 @@ public static class AuditPrompt
     public const string SystemTemplate = """
         You are a senior .NET and Azure reviewer performing a READ-ONLY architecture and practices audit
         of one Git repository checked out at the working directory ({{REPO}} @ {{SHA}}).
+        {{REPOTYPE}}
 
         Rules:
         - You may only read files inside the working directory, using the file viewing and search tools.
@@ -68,12 +69,28 @@ public static class AuditPrompt
 
         return SystemTemplate
             .Replace("{{REPO}}", request.RepoName, StringComparison.Ordinal)
+            .Replace("{{REPOTYPE}}", RepoTypeNote(request.RepoType), StringComparison.Ordinal)
             .Replace("{{SHA}}", request.Sha, StringComparison.Ordinal)
             .Replace("{{FACTS}}", TruncateFacts(request.FactsJson, MaxFactsChars), StringComparison.Ordinal)
             .Replace("{{CHECKS}}", FormatChecks(request.Checks), StringComparison.Ordinal)
             .Replace("{{DIFF}}", diff, StringComparison.Ordinal)
             .Replace("{{STANDARDS}}", standards, StringComparison.Ordinal);
     }
+
+    public static string RepoTypeNote(string? type) => type?.ToLowerInvariant() switch
+    {
+        "e2e" => "This is an END-TO-END TEST repository: it contains automated tests that run against deployed environments, "
+                 + "not a deployable application. Judge checks against test code (structure, readability, environment/config "
+                 + "handling, waits and retries, test data, isolation). Answer na for checks about application architecture, "
+                 + "Kubernetes deployment, databases or messaging unless the test code itself genuinely has that concern.",
+        "load" => "This is a LOAD / PERFORMANCE TEST repository: it contains load test scripts and tooling that run against "
+                  + "deployed environments, not a deployable application. Judge checks against that code (scenario structure, "
+                  + "configuration of targets and thresholds, reproducibility). Answer na for checks about application "
+                  + "architecture, Kubernetes deployment, databases or messaging unless the test code itself has that concern.",
+        "library" => "This repository is a shared library (no deployable service).",
+        "infra" => "This repository is infrastructure / configuration (no application code expected).",
+        _ => "",
+    };
 
     public static string FormatChecks(IEnumerable<AuditCheck> checks)
     {

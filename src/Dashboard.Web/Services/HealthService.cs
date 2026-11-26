@@ -15,6 +15,9 @@ namespace Dashboard.Web.Services;
 public sealed class RepoHealth
 {
     public required Repo Repo { get; init; }
+    /// <summary>Effective type (config / repo page / name patterns); see RepoTypes.Resolve.</summary>
+    public RepoType Type { get; init; }
+    public bool IsTestRepo => RepoTypes.IsTestRepo(Type);
     public IReadOnlyList<Pipeline> Pipelines { get; init; } = [];
     public IReadOnlyList<Component> Components { get; init; } = [];
     public IReadOnlyList<PipelineBuildStats> PipelineStats { get; init; } = [];
@@ -148,6 +151,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
             try
             {
                 var defaultBranch = repo.DefaultBranch ?? "refs/heads/main";
+                var repoType = RepoTypes.Resolve(repo.Name, repo.Type, cfg);
                 var repoPipelines = pipelines.Where(p => p.RepoId == repo.Id).ToList();
                 var repoRuns = runs.Where(r => r.RepoId == repo.Id).ToList();
                 var mainRuns = repoRuns.Where(r => !r.IsPullRequest && r.SourceBranch == defaultBranch && r.Status == "completed").ToList();
@@ -192,7 +196,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 var openForRepo = openStates.Where(s => s.RepoId == repo.Id).ToList();
                 var input = new RepoHealthInput
                 {
-                    Type = repo.Type,
+                    Type = repoType,
                     Dormant = dormant,
                     PipelineCount = buildPipelines.Count,
                     DefaultBranchCiRuns = ciRuns.Count(r => r.QueueTime >= windowStart),
@@ -239,6 +243,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 result.Add(new RepoHealth
                 {
                     Repo = repo,
+                    Type = repoType,
                     Pipelines = repoPipelines,
                     Components = components.Where(c => c.RepoId == repo.Id && !c.Hidden).OrderBy(c => c.Kind).ThenBy(c => c.Name).ToList(),
                     PipelineStats = stats,

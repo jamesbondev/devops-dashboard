@@ -85,6 +85,13 @@ Every phase in [plan.md](plan.md) is implemented and tested against **mock** Azu
 - **Bots:** clearcoder, product-health and "Build Service" accounts are excluded from PR metrics.
 - **Mock:** mirrors all of the above.
 
+### Test-only repos (E2E / Load)
+- Repos named `end2end_*` / `*-e2e-*` are type **E2E**; `*-load-*` / `*_load` are **Load** (`repos.e2ePatterns` / `loadPatterns`).
+  Precedence: `repos.types` in config > type chosen on the repo page (non-Service) > name patterns > Service.
+- Effects: DEP-001 and TST-001 are n/a; a failing run shows on Now as a low-priority "🧪 E2E tests failing" item
+  (no notification, not in the badge, not counted in "Main red now"); wasted minutes are reported separately;
+  the auditor is told the repo is a test repo and answers na for app-architecture / k8s / DB / messaging checks.
+
 ## Known risks for the first live run
 
 | Risk | Detail |

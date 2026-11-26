@@ -5,7 +5,9 @@ namespace Dashboard.Core.Entities;
 // Persistence model (EF Core, SQLite). All timestamps are UTC DateTimeOffset.
 // Raw ADO JSON is kept (gzip) alongside parsed fields so metrics can be re-derived after parser fixes.
 
-public enum RepoType { Service, Library, Infra }
+/// <summary>E2E and Load are test-only repos: their pipelines test other systems, so failures there are an
+/// early warning about environments/apps, not a broken build of the repo itself.</summary>
+public enum RepoType { Service, Library, Infra, E2E, Load }
 
 public sealed class Repo
 {
