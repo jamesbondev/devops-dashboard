@@ -36,10 +36,12 @@ environments:
     # adoId: 42                  # optional: ADO environment id, enables reading its check configurations
 defaultEnvironmentTier: Team
 
+# The shared YAML templates repo (owned by another team). `project` is the ADO project that holds it
+# (can differ from azureDevOps.project). aliasPatterns match the `resources.repositories` alias in your pipelines.
 templates:
-  project: Platform
-  repository: pipeline-templates
-  aliasPatterns: ["^templates?$", "pipeline-templates"]
+  project: Platform              # <-- set to the project containing cbi-yaml-templates
+  repository: cbi-yaml-templates
+  aliasPatterns: ["^templates?$", "cbi-yaml-templates"]
   compliantBranches: [main]
   experimentalBranches: [next]
   staleInfoDays: 14

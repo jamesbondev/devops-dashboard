@@ -159,17 +159,30 @@ public sealed class SyncService(
     {
         var branches = Cfg.Templates.CompliantBranches.Concat(Cfg.Templates.ExperimentalBranches).Distinct(StringComparer.OrdinalIgnoreCase);
         var count = 0;
+        var errors = new List<string>();
         foreach (var branch in branches)
         {
             var cursor = await CursorAsync("templates:" + branch);
-            var since = cursor.Watermark?.AddDays(-2) ?? Now.AddDays(-180);
-            var commits = await ado.ListTemplateCommitsAsync(branch, since, ct);
-            var existing = (await db.TemplateCommits.Where(c => c.Branch == branch).Select(c => c.Sha).ToListAsync(ct)).ToHashSet();
-            foreach (var c in commits.Where(c => !existing.Contains(c.Sha))) { db.TemplateCommits.Add(c); count++; }
-            cursor.Watermark = Now; cursor.LastSuccessAt = Now;
+            try
+            {
+                var since = cursor.Watermark?.AddDays(-2) ?? Now.AddDays(-180);
+                var commits = await ado.ListTemplateCommitsAsync(branch, since, ct);
+                var existing = (await db.TemplateCommits.Where(c => c.Branch == branch).Select(c => c.Sha).ToListAsync(ct)).ToHashSet();
+                foreach (var c in commits.Where(c => !existing.Contains(c.Sha))) { db.TemplateCommits.Add(c); count++; }
+                cursor.Watermark = Now; cursor.LastSuccessAt = Now;
+            }
+            catch (HttpRequestException ex)
+            {
+                // Wrong repo/project or a branch that doesn't exist (e.g. no `next`): record it and carry on.
+                var msg = $"Template repo '{Cfg.Templates.Project}/{Cfg.Templates.Repository}' branch '{branch}': {ex.Message}. Check templates.project/repository/branches in config/dashboard.yaml.";
+                log.LogWarning("{Message}", msg);
+                cursor.LastErrorAt = Now;
+                cursor.LastError = msg.Length > 500 ? msg[..500] : msg;
+                errors.Add($"{branch}: {(ex.StatusCode is { } sc ? ((int)sc).ToString() : ex.Message)}");
+            }
         }
         await db.SaveChangesAsync(ct);
-        return $"{count} new template commits";
+        return $"{count} new template commits" + (errors.Count > 0 ? $" (failed: {string.Join(", ", errors)} — see Jobs)" : "");
     }
 
     // ------------------------------------------------------------------ hot

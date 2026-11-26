@@ -104,14 +104,23 @@ public sealed class SyncScheduler(
     private async Task<string> DailyAsync(IServiceProvider s, CancellationToken ct)
     {
         var sync = s.GetRequiredService<SyncService>();
-        var parts = new List<string>
+        // Repo discovery must succeed; the other steps are independent so one bad step (e.g. a misconfigured
+        // template repo) doesn't stop policies, checks, backfills and snapshots.
+        var parts = new List<string> { await sync.DiscoverReposAsync(ct) };
+        async Task Step(string name, Func<Task<string>> step)
         {
-            await sync.DiscoverReposAsync(ct),
-            await sync.SyncPipelinesAsync(ct),
-            await sync.SyncPoliciesAsync(ct),
-            await sync.SyncEnvironmentChecksAsync(ct),
-            await sync.SyncTemplateCommitsAsync(ct),
-        };
+            try { parts.Add(await step()); }
+            catch (Exception ex) when (ex is not (OperationCanceledException or AdoAuthException))
+            {
+                log.LogWarning(ex, "Daily step {Step} failed", name);
+                parts.Add($"{name} FAILED: {ex.Message}");
+                await sync.MarkAsync("daily:" + name, ex);
+            }
+        }
+        await Step("pipelines", () => sync.SyncPipelinesAsync(ct));
+        await Step("policies", () => sync.SyncPoliciesAsync(ct));
+        await Step("environmentChecks", () => sync.SyncEnvironmentChecksAsync(ct));
+        await Step("templates", () => sync.SyncTemplateCommitsAsync(ct));
         var db = s.GetRequiredService<DashboardDbContext>();
         var now = clock.UtcNow;
         foreach (var repo in await db.Repos.Where(r => r.Assigned && r.BackfilledAt == null && !r.IsDisabled).ToListAsync(ct))
@@ -121,7 +130,7 @@ public sealed class SyncScheduler(
         await sync.MarkAsync("daily");
 
         var health = s.GetRequiredService<HealthService>();
-        parts.Add(await health.SnapshotAsync(ct));
+        await Step("snapshot", () => health.SnapshotAsync(ct));
 
         // Prune job history older than 14 days.
         var cutoff = now.AddDays(-14);
