@@ -159,6 +159,20 @@ public class BuildMetricsTests
         var stats = _calc.ForPipeline(1, runs, t.AddDays(-1), t.AddDays(1));
         Assert.NotNull(stats.OpenRed);
     }
+
+    [Fact]
+    public void Repo_red_only_when_most_recent_ci_build_failed()
+    {
+        var t = B.T0;
+        // Pipeline 1 failed 30 days ago and never ran again; pipeline 2 has been green since.
+        var stale = _calc.ForPipeline(1, [(B.Run(1, t, "failed"), [B.Stage(1, "a", "Build", "failed", start: t)])], t.AddDays(-60), t.AddDays(30));
+        var green = _calc.ForPipeline(2, [(B.Run(2, t.AddDays(5)), [B.Stage(2, "b", "Build", "succeeded", start: t.AddDays(5))])], t.AddDays(-60), t.AddDays(30));
+        Assert.NotNull(stale.OpenRed);
+        Assert.Null(BuildMetricsCalculator.RepoOpenRed([stale, green]));
+
+        var newFail = _calc.ForPipeline(3, [(B.Run(3, t.AddDays(6), "failed"), [B.Stage(3, "c", "Build", "failed", start: t.AddDays(6))])], t.AddDays(-60), t.AddDays(30));
+        Assert.Equal(3, BuildMetricsCalculator.RepoOpenRed([stale, green, newFail])!.PipelineId);
+    }
 }
 
 public class StatsTests

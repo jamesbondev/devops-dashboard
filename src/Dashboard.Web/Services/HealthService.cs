@@ -164,7 +164,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 var passed = stats.Sum(s => s.PassedRuns);
                 var failed = stats.Sum(s => s.FailedRuns);
                 var completed = stats.Sum(s => s.CompletedRuns);
-                var openRed = stats.Select(s => s.OpenRed).Where(r => r is not null).OrderBy(r => r!.Start).FirstOrDefault();
+                var openRed = BuildMetricsCalculator.RepoOpenRed(stats);
                 var longestRed = stats.SelectMany(s => s.RedIntervals).Select(i => (double?)BuildMetricsCalculator.RedWorkingHours(i, wh, now)).DefaultIfEmpty(null).Max();
                 var redWall = stats.SelectMany(s => s.RedIntervals).Sum(i => BuildMetricsCalculator.RedWallHours(i, now));
                 var repoPrs = prs.Where(p => p.RepoId == repo.Id).Select(p => (p, eventsByPr.GetValueOrDefault(p.Id) ?? (IReadOnlyList<PrEvent>)[])).ToList();

@@ -34,6 +34,8 @@ public sealed class PipelineBuildStats
     public double WastedMinutes { get; init; }
     public IReadOnlyList<RedInterval> RedIntervals { get; init; } = [];
     public RedInterval? OpenRed => RedIntervals.LastOrDefault(r => r.Open);
+    /// <summary>Most recent completed (pass/fail) attempt on the default branch, any age.</summary>
+    public AttemptOutcome? LastCompleted { get; init; }
     public double? MedianBuildMinutes { get; init; }
     public double? P95BuildMinutes { get; init; }
     public IReadOnlyList<FlakyJob> FlakyJobs { get; init; } = [];
@@ -180,8 +182,19 @@ public sealed class BuildMetricsCalculator(DashboardConfig config)
             P95BuildMinutes = durations.Count >= config.Metrics.PercentileMinSample ? Stats.Percentile(durations, 0.95) : null,
             FlakyJobs = completed.SelectMany(o => o.FlakyJobs).ToList(),
             SameShaFlakes = sameSha,
+            LastCompleted = events.Count == 0 ? null : events[^1],
             Outcomes = inWindow,
         };
+    }
+
+    /// <summary>
+    /// Repo-level "red now": only when the repo's most recent completed default-branch CI build (across all its CI
+    /// pipelines) failed. A stale pipeline that failed weeks ago doesn't count once newer builds are green.
+    /// </summary>
+    public static RedInterval? RepoOpenRed(IReadOnlyList<PipelineBuildStats> stats)
+    {
+        var latest = stats.Where(s => s.LastCompleted is not null).MaxBy(s => s.LastCompleted!.Time);
+        return latest?.LastCompleted?.Outcome == Outcome.Fail ? latest.OpenRed : null;
     }
 
     public static double RedWorkingHours(RedInterval i, WorkingHours wh, DateTimeOffset now) => wh.Between(i.Start, i.End ?? now);
