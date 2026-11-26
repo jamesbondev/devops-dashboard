@@ -34,6 +34,8 @@ public interface IAdoClient
     Task<IReadOnlyList<Run>> ListRunsAsync(RunQuery query, CancellationToken ct);
     /// <summary>Project-wide running/queued builds.</summary>
     Task<IReadOnlyList<Run>> ListActiveRunsAsync(CancellationToken ct);
+    /// <summary>One build by id; null if it no longer exists (deleted / retention).</summary>
+    Task<Run?> GetRunAsync(int buildId, CancellationToken ct);
     /// <summary>Timeline incl. previous-attempt records (IsPreviousAttempt = true).</summary>
     Task<IReadOnlyList<TimelineRecord>> GetTimelineAsync(int buildId, CancellationToken ct);
     Task<IReadOnlyList<RunResource>> GetRunResourcesAsync(int pipelineId, int runId, CancellationToken ct);

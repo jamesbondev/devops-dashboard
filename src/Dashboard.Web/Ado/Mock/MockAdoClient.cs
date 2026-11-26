@@ -63,6 +63,13 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
         return Task.FromResult<IReadOnlyList<Run>>(Call(runs));
     }
 
+    public Task<Run?> GetRunAsync(int buildId, CancellationToken ct)
+    {
+        var now = Now;
+        var m = world.FindRun(buildId, now);
+        return Task.FromResult(Call(m is null ? null : world.RunSnapshot(m, now)));
+    }
+
     public Task<IReadOnlyList<TimelineRecord>> GetTimelineAsync(int buildId, CancellationToken ct)
     {
         var now = Now;

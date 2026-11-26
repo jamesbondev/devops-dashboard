@@ -512,6 +512,16 @@ public sealed class LiveAdoClient : IAdoClient
         return values.Select(MapPr).Where(p => p.Status != "active").ToList();
     }
 
+    public async Task<Run?> GetRunAsync(int buildId, CancellationToken ct)
+    {
+        try
+        {
+            var (doc, _) = await GetAsync($"{Proj}/_apis/build/builds/{buildId}?{V()}", ct);
+            using (doc) { var r = MapBuild(doc.RootElement); return r.Id == 0 ? null : r; }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound) { return null; }
+    }
+
     public async Task<PullRequest?> GetPullRequestAsync(string repoId, int pullRequestId, CancellationToken ct)
     {
         try

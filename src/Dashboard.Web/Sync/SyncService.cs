@@ -207,8 +207,8 @@ public sealed class SyncService(
         var stale = await db.Runs.Where(r => r.Status != "completed" && !r.DeletedInAdo).ToListAsync(ct);
         foreach (var r in stale.Where(r => !activeIds.Contains(r.Id) && assigned.ContainsKey(r.RepoId)))
         {
-            var fresh = (await ado.ListRunsAsync(new RunQuery { DefinitionIds = [r.PipelineId], MinTime = r.QueueTime.AddMinutes(-1), StatusFilter = "all", Max = 500 }, ct))
-                .FirstOrDefault(x => x.Id == r.Id);
+            // Direct GET by id: a list query from the run's queue time can miss very old runs (e.g. one queued 900 days ago).
+            var fresh = await ado.GetRunAsync(r.Id, ct);
             if (fresh is null) { r.Status = "completed"; r.Result ??= "canceled"; r.DeletedInAdo = true; continue; }
             await UpsertRunAsync(fresh, ct);
             await RefreshTimelineAsync(fresh, assigned[fresh.RepoId], ct, force: true);
