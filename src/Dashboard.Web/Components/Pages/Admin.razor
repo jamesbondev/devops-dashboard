@@ -4,6 +4,7 @@
 @page "/gates"
 @page "/glossary"
 @inject NavigationManager Nav
+@implements IDisposable
 
 <PageTitle>Admin · DevOps Dashboard</PageTitle>
 <header class="page-head">
@@ -29,9 +30,19 @@
 @code {
     private static readonly (string Key, string Title)[] Tabs = [("jobs", "Jobs & sync"), ("settings", "Settings"), ("gates", "Gate checks"), ("glossary", "Glossary")];
     private string _tab = "jobs";
-    protected override void OnParametersSet()
+    // Routes share this component, so Blazor reuses the instance (no parameters change) when switching
+    // tabs; follow the URL directly.
+    protected override void OnInitialized()
+    {
+        SetTab();
+        Nav.LocationChanged += OnLocationChanged;
+    }
+    private void OnLocationChanged(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        InvokeAsync(() => { SetTab(); StateHasChanged(); });
+    private void SetTab()
     {
         var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/');
         _tab = Tabs.Any(t => t.Key == path) ? path : "jobs";
     }
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }
