@@ -1,0 +1,15 @@
+# Never send local build output into the image: stale bin/obj can make `dotnet publish` reuse old binaries.
+**/bin/
+**/obj/
+.git/
+.vs/
+.vscode/
+.idea/
+.claude/
+.env
+data/
+clones/
+src/Dashboard.Web/Data/clones/
+src/Dashboard.Web/Data/*.db*
+**/*.user
+tests/**/TestResults/
