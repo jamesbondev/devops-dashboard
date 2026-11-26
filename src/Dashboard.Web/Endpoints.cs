@@ -18,6 +18,34 @@ public static class Endpoints
                       : Results.Problem("database unavailable");
         });
 
+        // Diagnostics: a "running" run as stored vs. what ADO returns now (explains stuck Running & queued rows).
+        app.MapGet("/debug/running", async (DashboardDbContext db, Ado.IAdoClient ado, CancellationToken ct) =>
+        {
+            var sb = new StringBuilder();
+            var stored = await db.Runs.AsNoTracking().Where(r => r.Status != "completed").OrderBy(r => r.QueueTime).ToListAsync(ct);
+            var repos = await db.Repos.AsNoTracking().ToDictionaryAsync(r => r.Id, ct);
+            List<Core.Entities.Run> active;
+            try { active = (await ado.ListActiveRunsAsync(ct)).ToList(); }
+            catch (Exception ex) { active = []; sb.AppendLine($"ListActiveRuns failed: {ex.GetType().Name}: {ex.Message}"); }
+            var activeById = active.ToDictionary(r => r.Id);
+            sb.AppendLine($"stored non-completed runs: {stored.Count}; ADO active runs (project): {active.Count}").AppendLine();
+            foreach (var r in stored)
+            {
+                var repo = repos.GetValueOrDefault(r.RepoId);
+                sb.AppendLine($"run {r.Id} #{r.BuildNumber} repo={repo?.Name ?? r.RepoId} assigned={repo?.Assigned} queued={r.QueueTime:u} stored status={r.Status} result={r.Result} deletedInAdo={r.DeletedInAdo}");
+                sb.AppendLine($"    in ADO active list: {(activeById.TryGetValue(r.Id, out var a) ? $"yes (status={a.Status})" : "no")}");
+                try
+                {
+                    var fresh = await ado.GetRunAsync(r.Id, ct);
+                    sb.AppendLine(fresh is null ? "    GET by id: not found (404)" : $"    GET by id: status={fresh.Status} result={fresh.Result} finished={fresh.FinishTime:u}");
+                }
+                catch (Exception ex) { sb.AppendLine($"    GET by id failed: {ex.GetType().Name}: {ex.Message}"); }
+            }
+            var hot = await db.SyncCursors.AsNoTracking().FirstOrDefaultAsync(c => c.Key == "hot", ct);
+            sb.AppendLine().AppendLine($"hot sync: last success {hot?.LastSuccessAt:u}; last error: {hot?.LastError ?? "none"}");
+            return Results.Text(sb.ToString(), "text/plain; charset=utf-8");
+        });
+
         // Diagnostics: how each recent default-branch run of a repo is rated (explains "main red").
         app.MapGet("/debug/red/{name}", async (string name, DashboardDbContext db, ConfigService config, HealthService health) =>
         {
