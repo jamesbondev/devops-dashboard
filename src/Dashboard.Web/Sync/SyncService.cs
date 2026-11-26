@@ -117,9 +117,12 @@ public sealed class SyncService(
     {
         var total = 0;
         var me = await identity.GetAsync(ado, ct);
-        foreach (var env in Cfg.Environments)
+        // Deployment environments (optional adoId) plus gate-only environments (e.g. the Approval Gate 2 environment).
+        var targets = Cfg.Environments.Select(e => (e.Name, Id: e.AdoId ?? (ado.IsMock ? e.Order + 1 : (int?)null)))
+            .Concat(Cfg.Pipelines.GateEnvironments.Select(g => (g.Name, Id: (int?)g.AdoId)));
+        foreach (var env in targets)
         {
-            var id = env.AdoId ?? (ado.IsMock ? env.Order + 1 : null);
+            var id = env.Id;
             if (id is null) continue;
             try
             {

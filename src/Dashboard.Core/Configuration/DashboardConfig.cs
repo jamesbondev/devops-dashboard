@@ -69,6 +69,16 @@ public sealed class PipelinesConfig
     public List<string> GateStagePatterns { get; set; } = ["approval[ _-]?gate"];
     /// <summary>Minutes a gate stage must be waiting before it appears in the attention queue.</summary>
     public int GateBlockedMinutes { get; set; } = 10;
+    /// <summary>ADO environments used only as gates (e.g. the environment the "Approval Gate 2" deployment job targets).
+    /// Their Approvals &amp; checks are read for the Gates page; they are not deployment targets.</summary>
+    public List<GateEnvironmentConfig> GateEnvironments { get; set; } = [];
+}
+
+public sealed class GateEnvironmentConfig
+{
+    public string Name { get; set; } = "";
+    /// <summary>From the environment URL: .../_environments/&lt;id&gt;</summary>
+    public int AdoId { get; set; }
 }
 
 public sealed class TemplateConfig

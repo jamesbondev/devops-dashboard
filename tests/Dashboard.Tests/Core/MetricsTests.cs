@@ -432,3 +432,17 @@ public class ConfigLoaderTests
         Assert.Contains(r.Errors, e => e.Contains("hotSeconds"));
     }
 }
+
+public class GateEnvironmentConfigTests
+{
+    [Fact]
+    public void Gate_environments_parse_and_validate()
+    {
+        var ok = ConfigLoader.Parse("pipelines:\n  gateEnvironments:\n    - { name: approval-gate, adoId: 42 }\n");
+        Assert.True(ok.IsValid, string.Join("; ", ok.Errors));
+        Assert.Equal(42, Assert.Single(ok.Config.Pipelines.GateEnvironments).AdoId);
+
+        var bad = ConfigLoader.Parse("pipelines:\n  gateEnvironments:\n    - { name: approval-gate }\n");
+        Assert.Contains(bad.Errors, e => e.Contains("adoId"));
+    }
+}

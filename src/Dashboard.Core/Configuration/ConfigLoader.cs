@@ -80,6 +80,13 @@ public static class ConfigLoader
         foreach (var p in c.Templates.AliasPatterns) CheckRegex(p, "templates.aliasPatterns", errors);
         foreach (var p in c.Pipelines.ReleaseNamePatterns) CheckRegex(p, "pipelines.releaseNamePatterns", errors);
         foreach (var p in c.Pipelines.GateStagePatterns) CheckRegex(p, "pipelines.gateStagePatterns", errors);
+        foreach (var g in c.Pipelines.GateEnvironments)
+        {
+            if (string.IsNullOrWhiteSpace(g.Name)) errors.Add("pipelines.gateEnvironments[].name is required.");
+            if (g.AdoId <= 0) errors.Add($"pipelines.gateEnvironments[{g.Name}].adoId must be the environment id from its URL (…/_environments/<id>).");
+            if (c.Environments.Any(e => e.Name.Equals(g.Name, StringComparison.OrdinalIgnoreCase)))
+                errors.Add($"Gate environment '{g.Name}' clashes with a deployment environment name.");
+        }
         foreach (var p in c.Components.AksJobPatterns.Concat(c.Components.DatabaseJobPatterns)) CheckRegex(p, "components job patterns", errors);
         foreach (var r in c.Components.DeployRules)
         {
