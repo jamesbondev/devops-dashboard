@@ -32,3 +32,6 @@ Thumbs.db
 
 # Claude Code local state / agent worktrees
 .claude/
+
+# local dev runs
+src/Dashboard.Web/Data/clones/

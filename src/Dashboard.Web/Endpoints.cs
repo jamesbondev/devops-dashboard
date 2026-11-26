@@ -43,9 +43,8 @@ public static class Endpoints
                 {
                     var recs = await db.TimelineRecords.AsNoTracking().Where(t => t.RunId == r.Id && (t.Type == "Stage" || t.Type == "Job" || t.Type == "Phase" || t.Type.StartsWith("Checkpoint"))).ToListAsync();
                     var ev = calc.EvaluateRun(r, recs);
-                    var cps = recs.Where(t => t.Type.StartsWith("Checkpoint")).Select(t => t.ParentId).ToHashSet();
                     var stages = recs.Where(t => t.Type == "Stage").OrderBy(t => t.Order).Select(t =>
-                        $"{t.Name}[a{t.Attempt}{(t.IsPreviousAttempt ? " prev" : "")}]={t.Result ?? t.State}{(Core.Metrics.StageClassifier.IsBuildStage(t.Name, t.Identifier, cfg, cps.Contains(t.RecordId)) ? "" : " (not build)")}");
+                        $"{t.Name}[a{t.Attempt}{(t.IsPreviousAttempt ? " prev" : "")}]={t.Result ?? t.State}{(Core.Metrics.StageClassifier.IsBuildStage(t.Name, t.Identifier, cfg, false) ? "" : " (not build)")}");
                     sb.AppendLine($"  {r.QueueTime:u} #{r.BuildNumber} id={r.Id} reason={r.Reason} status={r.Status} result={r.Result} → {ev.Final}  attempts=[{string.Join(",", ev.Attempts.Select(a => $"{a.Outcome}@{a.Time:u}"))}]");
                     sb.AppendLine($"      stages: {(recs.Count == 0 ? "(no timeline synced)" : string.Join(" | ", stages))}");
                 }

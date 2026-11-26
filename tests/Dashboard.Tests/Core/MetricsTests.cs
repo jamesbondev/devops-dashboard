@@ -161,6 +161,20 @@ public class BuildMetricsTests
     }
 
     [Fact]
+    public void Ci_stage_with_checkpoint_records_still_counts_as_build()
+    {
+        // Real case: CI stages using a protected service connection get Checkpoint records; green runs were "Excluded".
+        var t = B.T0;
+        var run = B.Run(1, t);
+        var records = new List<TimelineRecord>
+        {
+            B.Stage(1, "s", "Terraform CI Build and Test", "succeeded", start: t),
+            new() { RunId = 1, RecordId = "ck", ParentId = "s", Type = "Checkpoint", Name = "Checkpoint", State = "completed", Result = "succeeded" },
+        };
+        Assert.Equal(Outcome.Pass, _calc.EvaluateRun(run, records).Final);
+    }
+
+    [Fact]
     public void Repo_red_only_when_most_recent_ci_build_failed()
     {
         var t = B.T0;

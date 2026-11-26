@@ -62,10 +62,9 @@ public sealed class BuildMetricsCalculator(DashboardConfig config)
             return new RunBuildOutcome(run, o, [new AttemptOutcome(run.Id, 1, o, t)], dur, [], 0);
         }
 
-        var checkpointParents = records.Where(r => r.Type.StartsWith("Checkpoint", StringComparison.OrdinalIgnoreCase))
-            .Select(r => r.ParentId).Where(p => p is not null).ToHashSet();
-        bool IsBuild(TimelineRecord s) => StageClassifier.IsBuildStage(s.Name, s.Identifier, config,
-            checkpointParents.Contains(s.RecordId));
+        // Checkpoint records are NOT a deploy signal: CI stages get them too (service connection / pool / variable
+        // group checks). Deploy stages are recognised by name (environments) and gates by pipelines.gateStagePatterns.
+        bool IsBuild(TimelineRecord s) => StageClassifier.IsBuildStage(s.Name, s.Identifier, config, hasCheckpoints: false);
 
         var buildStages = stages.Where(IsBuild).ToList();
         if (buildStages.Count == 0)
