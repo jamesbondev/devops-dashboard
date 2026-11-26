@@ -288,6 +288,7 @@ public sealed class SyncService(
     public async Task<string> WarmAsync(CancellationToken ct, string? onlyRepoId = null)
     {
         var repos = (await AssignedReposAsync(ct)).Where(r => onlyRepoId is null || r.Id == onlyRepoId).ToList();
+        if (onlyRepoId is null) await RederiveIfConfigChangedAsync(repos, ct);
         // Least-synced repos first so a limited timeline budget spreads fairly.
         var cursors = await db.SyncCursors.AsNoTracking().Where(c => c.Key.StartsWith("runs:")).ToDictionaryAsync(c => c.Key, c => c.Watermark, ct);
         repos = repos.OrderBy(r => cursors.GetValueOrDefault("runs:" + r.Id) ?? DateTimeOffset.MinValue).ToList();
@@ -463,6 +464,23 @@ public sealed class SyncService(
         Detach<Deployment>(d => d.RunId == run.Id);
         await db.Deployments.Where(d => d.RunId == run.Id).ExecuteDeleteAsync(ct);
         db.Deployments.AddRange(deps);
+    }
+
+    /// <summary>
+    /// Stored deployments are derived from timelines with the config at the time. When the environment / pipeline /
+    /// component rules change, re-derive everything once so old rows (e.g. under renamed environments) don't linger.
+    /// </summary>
+    public async Task RederiveIfConfigChangedAsync(IReadOnlyList<Repo> repos, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(new { Cfg.Environments, Cfg.Pipelines, Cfg.Components, v = 1 });
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json)))[..16];
+        var cursor = await CursorAsync("derive-config");
+        if (cursor.Value == hash) return;
+        foreach (var repo in repos) await RederiveRepoAsync(repo.Id, ct);
+        cursor.Value = hash;
+        cursor.LastSuccessAt = Now;
+        await db.SaveChangesAsync(ct);
+        log.LogInformation("Deployment rules changed; re-derived deployments for {Count} repos", repos.Count);
     }
 
     /// <summary>Re-derive all deployments for a repo (after components or environment config change).</summary>

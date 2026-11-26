@@ -160,6 +160,14 @@ public class BuildMetricsTests
         Assert.NotNull(stats.OpenRed);
     }
 
+    [Theory]
+    [InlineData("🚀 staginggreen deploy", "staging-green")]
+    [InlineData("🚀 prodeu deploy", "prod-eu")]
+    [InlineData("simgreen apply", "sim-green")]
+    [InlineData("🚀 testskele deploy", "team")]
+    public void Emoji_prefixed_and_apply_stages_map_to_environments(string stage, string env) =>
+        Assert.Equal(env, StageClassifier.MatchEnvironment(stage, null, Defaults.Environments())?.Name);
+
     [Fact]
     public void Ci_stage_with_checkpoint_records_still_counts_as_build()
     {

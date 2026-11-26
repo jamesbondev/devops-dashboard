@@ -52,7 +52,15 @@ public static class StageClassifier
         Cache.GetOrAdd(pattern, p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200)));
 
     public static bool AnyMatch(IEnumerable<string> patterns, params string?[] values) =>
-        patterns.Any(p => values.Any(v => v is not null && Rx(p).IsMatch(v.Trim())));
+        patterns.Any(p => values.Any(v => v is not null && Rx(p).IsMatch(Clean(v))));
+
+    // Stage names often carry emoji / symbols ("🚀 staginggreen deploy"); match on the text after them.
+    private static string Clean(string v)
+    {
+        var i = 0;
+        while (i < v.Length && !char.IsLetterOrDigit(v[i])) i++;
+        return v[i..].TrimEnd();
+    }
 
     public static EnvironmentConfig? MatchEnvironment(string? stageName, string? identifier, IEnumerable<EnvironmentConfig> envs)
     {
