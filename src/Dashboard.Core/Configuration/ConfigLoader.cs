@@ -78,6 +78,9 @@ public static class ConfigLoader
             warnings.Add("No environment has tier Production; delivery metrics will be empty.");
 
         foreach (var p in c.Templates.AliasPatterns) CheckRegex(p, "templates.aliasPatterns", errors);
+        foreach (var p in c.Pipelines.ReleaseNamePatterns) CheckRegex(p, "pipelines.releaseNamePatterns", errors);
+        foreach (var p in c.Pipelines.GateStagePatterns) CheckRegex(p, "pipelines.gateStagePatterns", errors);
+        foreach (var p in c.Components.AksJobPatterns.Concat(c.Components.DatabaseJobPatterns)) CheckRegex(p, "components job patterns", errors);
         foreach (var r in c.Components.DeployRules)
         {
             if (string.IsNullOrWhiteSpace(r.Component)) errors.Add("components.deployRules[].component is required.");
@@ -121,12 +124,19 @@ public static class Defaults
         Rules = Rules(),
     };
 
+    /// <summary>
+    /// Stage naming used by the shared release template: team envs are "test{name} deploy" (testlemur, testfox2, …);
+    /// staging/sim/prod are per region: green (UK) and eu, e.g. "staginggreen deploy", "prodeu deploy".
+    /// </summary>
     public static List<EnvironmentConfig> Environments() =>
     [
-        new() { Name = "team", Tier = EnvironmentTier.Team, StagePatterns = ["^deploy[_-]?team", "team[_-]?env", "^dev"], Order = 0 },
-        new() { Name = "staging", Tier = EnvironmentTier.Staging, StagePatterns = ["staging", "^stg"], Order = 1 },
-        new() { Name = "sim", Tier = EnvironmentTier.Production, StagePatterns = ["(^|[_-])sim($|[_-])", "^deploy[_-]?sim"], Order = 2 },
-        new() { Name = "prod", Tier = EnvironmentTier.Production, StagePatterns = ["(^|[_-])prod($|[_-]|uction)", "^deploy[_-]?prod"], Order = 3 },
+        new() { Name = "team", Tier = EnvironmentTier.Team, StagePatterns = [@"^test[a-z0-9]+[ _-]?deploy$"], Order = 0 },
+        new() { Name = "staging-green", Tier = EnvironmentTier.Staging, Region = "green", StagePatterns = [@"^staging[ _-]?green[ _-]?deploy$"], Order = 1 },
+        new() { Name = "staging-eu", Tier = EnvironmentTier.Staging, Region = "eu", StagePatterns = [@"^staging[ _-]?eu[ _-]?deploy$"], Order = 2 },
+        new() { Name = "sim-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^sim[ _-]?green[ _-]?deploy$"], Order = 3 },
+        new() { Name = "sim-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^sim[ _-]?eu[ _-]?deploy$"], Order = 4 },
+        new() { Name = "prod-green", Tier = EnvironmentTier.Production, Region = "green", StagePatterns = [@"^prod[ _-]?green[ _-]?deploy$"], Order = 5 },
+        new() { Name = "prod-eu", Tier = EnvironmentTier.Production, Region = "eu", StagePatterns = [@"^prod[ _-]?eu[ _-]?deploy$"], Order = 6 },
     ];
 
     public static List<RuleConfig> Rules() =>

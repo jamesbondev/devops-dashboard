@@ -12,24 +12,27 @@ namespace Dashboard.Core.Metrics;
 /// </summary>
 public sealed class DeploymentDeriver(DashboardConfig config)
 {
-    private static readonly Regex DbJob = new(@"dacpac|database|(^|[_\-\s])db($|[_\-\s])|sql", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     public List<Deployment> Derive(Run run, string repoName, string pipelineName, IReadOnlyList<TimelineRecord> records, IReadOnlyList<Component> components)
     {
         var result = new List<Deployment>();
         var visible = components.Where(c => !c.Hidden).ToList();
         var stages = records.Where(r => r.Type == "Stage" && !r.IsPreviousAttempt).ToList();
+        // Gate stages (e.g. "Approval Gate 2") hold releases before the deploy stages: their time is approval wait.
+        var gates = stages.Where(s => StageClassifier.IsGate(s.Name, s.Identifier, config.Pipelines) && s.StartTime is not null).ToList();
         foreach (var stage in stages)
         {
             var env = StageClassifier.MatchEnvironment(stage.Name, stage.Identifier, config.Environments);
             if (env is null) continue;
-            if (ResultClassifier.Classify(stage.Result, config.Results) == Outcome.Excluded && stage.State != "inProgress" && stage.State != "pending")
-                continue; // skipped / cancelled before starting: not a deployment
+            // Skipped/cancelled, or not started yet (pending): not a deployment (yet).
+            if (stage.State == "pending" || (ResultClassifier.Classify(stage.Result, config.Results) == Outcome.Excluded && stage.State != "inProgress"))
+                continue;
 
             var children = Descendants(records, stage.RecordId).ToList();
             var jobs = children.Where(r => r.Type == "Job" && !r.IsPreviousAttempt).ToList();
             var wait = children.Where(r => r.Type.StartsWith("Checkpoint", StringComparison.OrdinalIgnoreCase) && r.StartTime is not null)
                 .Sum(r => ((r.FinishTime ?? DateTimeOffset.UtcNow) - r.StartTime!.Value).TotalSeconds);
+            wait += gates.Where(g => g.FinishTime is not null && (stage.StartTime is null || g.FinishTime <= stage.StartTime))
+                .Sum(g => (g.FinishTime!.Value - g.StartTime!.Value).TotalSeconds);
 
             var targets = ResolveComponents(repoName, pipelineName, stage, jobs, visible);
             foreach (var (componentId, jobResult, jobStart, jobFinish) in targets)
@@ -85,18 +88,21 @@ public sealed class DeploymentDeriver(DashboardConfig config)
                     map[c.Id] = (j.Result, j.StartTime, j.FinishTime);
         if (map.Count > 0) return map.Select(kv => ((int?)kv.Key, kv.Value.Result, kv.Value.Start, kv.Value.Finish)).ToList();
 
-        // 3. Heuristic: DB-looking jobs deploy Database components; other jobs (skaffold) deploy all AKS components.
+        // 3. Job-name patterns: skaffold jobs deploy every AKS component, dacpac jobs deploy database components.
+        //    Infrastructure jobs (pre_apply, terraform_*, mssql_managed_identity_*) are not component deployments.
         var dbComps = components.Where(c => c.Kind == ComponentKind.Database).ToList();
         var aksComps = components.Where(c => c.Kind == ComponentKind.AksService).ToList();
         foreach (var j in jobs)
         {
-            var targets = DbJob.IsMatch(j.Name) ? dbComps : aksComps;
+            var targets = StageClassifier.AnyMatch(config.Components.DatabaseJobPatterns, j.Name, j.Identifier) ? dbComps
+                : StageClassifier.AnyMatch(config.Components.AksJobPatterns, j.Name, j.Identifier) ? aksComps
+                : [];
             foreach (var c in targets) map[c.Id] = (j.Result, j.StartTime, j.FinishTime);
         }
         if (map.Count > 0) return map.Select(kv => ((int?)kv.Key, kv.Value.Result, kv.Value.Start, kv.Value.Finish)).ToList();
 
-        // 4. Single component, or unattributed (repo-level).
-        if (components.Count == 1) return [(components[0].Id, null, null, null)];
+        // 4. Single component, or unattributed (repo-level, e.g. terraform-only infra deployments).
+        if (components.Count == 1 && jobs.Count == 0) return [(components[0].Id, null, null, null)];
         return [(null, null, null, null)];
     }
 

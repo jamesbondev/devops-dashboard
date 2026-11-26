@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Web.Services;
 
-public enum AttentionKind { ApprovalForMe = 1, MainRed = 2, ProductionDeployFailed = 3, StuckRelease = 4, StuckPr = 5, PrValidationFailed = 6 }
+public enum AttentionKind { ApprovalForMe = 1, GateBlocked = 2, MainRed = 3, ProductionDeployFailed = 4, StuckRelease = 5, StuckPr = 6, PrValidationFailed = 7 }
 
 public sealed record AttentionItem(
     AttentionKind Kind, string RepoId, string RepoName, string Title, string Detail, string? Link, DateTimeOffset Since, double Score, string? Badge = null);
@@ -147,6 +147,23 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
             return new RunningItem(r, repos.GetValueOrDefault(r.RepoId)?.Name ?? "?", pipelines.GetValueOrDefault(r.PipelineId)?.Name ?? "?", current?.Name, env, waiting);
         }).ToList();
 
+        // Gate blocked: a release waiting in a gate stage (e.g. "Approval Gate 2") for longer than configured.
+        // Read from the run timeline, so it works whether the gate is an environment check or a ManualValidation task.
+        var mineRuns = approvals.Where(a => a.AssignedToMe && a.RunId is not null).Select(a => a.RunId!.Value).ToHashSet();
+        var gateCutoff = TimeSpan.FromMinutes(cfg.Pipelines.GateBlockedMinutes);
+        foreach (var r in active.Where(r => repos.ContainsKey(r.RepoId) && !muted.Contains(r.RepoId) && !mineRuns.Contains(r.Id)))
+        {
+            var gate = activeStages.Where(s => s.RunId == r.Id && s.State == "inProgress" && s.StartTime is not null
+                                               && StageClassifier.IsGate(s.Name, s.Identifier, cfg.Pipelines)).FirstOrDefault();
+            if (gate is null || now - gate.StartTime!.Value < gateCutoff) continue;
+            var next = activeStages.Where(s => s.RunId == r.Id && s.Order > gate.Order).OrderBy(s => s.Order)
+                .Select(s => StageClassifier.MatchEnvironment(s.Name, s.Identifier, cfg.Environments)?.Name).FirstOrDefault(n => n is not null);
+            attention.Add(new AttentionItem(AttentionKind.GateBlocked, r.RepoId, repos[r.RepoId].Name,
+                $"Release waiting at '{gate.Name}': {repos[r.RepoId].Name}",
+                $"{pipelines.GetValueOrDefault(r.PipelineId)?.Name} {r.BuildNumber} · waiting {Fmt.Hours((now - gate.StartTime.Value).TotalHours)}" + (next is null ? "" : $" · next: {next}") + " · may need your approval",
+                r.WebUrl, gate.StartTime.Value, 900 + (now - gate.StartTime.Value).TotalMinutes / 10));
+        }
+
         // Component × environment matrix
         var envs = cfg.Environments.OrderBy(e => e.Order).Select(e => e.Name).ToList();
         var components = await db.Components.AsNoTracking().Where(c => repoIds.Contains(c.RepoId) && !c.Hidden).ToListAsync(ct);
@@ -169,15 +186,19 @@ public sealed class NowService(IServiceScopeFactory scopes, ConfigService config
                 {
                     var envDeps = compDeps.Where(d => d.EnvironmentName == env).ToList();
                     var latest = envDeps.Where(d => ResultClassifier.Classify(d.Result, cfg.Results) == Outcome.Pass).OrderByDescending(d => d.FinishTime).FirstOrDefault();
-                    var inProgress = envDeps.FirstOrDefault(d => d.FinishTime is null && d.State is "inProgress" or "pending");
+                    var inProgress = envDeps.FirstOrDefault(d => d.FinishTime is null && d.State == "inProgress");
                     var notDeployed = latest is null ? 0 : commits.Count(c => c.RepoId == repo.Id && depRunTimes.TryGetValue(latest.RunId, out var q) && c.Date > q);
                     cells[env] = new MatrixCell(latest, inProgress, false, notDeployed);
                 }
-                // Drift: Production environments on different versions
-                var prodVersions = cfg.Environments.Where(e => e.Tier == EnvironmentTier.Production).Select(e => cells.GetValueOrDefault(e.Name)?.Latest?.Version).Where(v => v is not null).Distinct().Count();
-                if (prodVersions > 1)
-                    foreach (var e in cfg.Environments.Where(e => e.Tier == EnvironmentTier.Production))
-                        if (cells.TryGetValue(e.Name, out var cell)) cells[e.Name] = cell with { Drift = true };
+                // Drift: Production-tier environments in the same region (e.g. sim-green vs prod-green) on different versions.
+                // Regions are compared separately because a release may legitimately go to only one region.
+                foreach (var region in cfg.Environments.Where(e => e.Tier == EnvironmentTier.Production).GroupBy(e => e.Region ?? ""))
+                {
+                    var versions = region.Select(e => cells.GetValueOrDefault(e.Name)?.Latest?.Version).Where(v => v is not null).Distinct().Count();
+                    if (versions <= 1) continue;
+                    foreach (var e in region)
+                        if (cells.TryGetValue(e.Name, out var cell) && cell.Latest is not null) cells[e.Name] = cell with { Drift = true };
+                }
                 matrix.Add(new MatrixRow(repo.Id, repo.Name, comp, cells));
             }
         }

@@ -16,6 +16,9 @@ public sealed class MockWorld
     public const string MeId = "00000000-0000-4000-8000-00000000me01";
     public const string MeName = "Tech Lead (you)";
     public const string ReleaseApproversGroupId = "00000000-0000-4000-8000-0000000grp01";
+    /// <summary>Group the mock "you" belongs to; Approval Gate 2 escalations are assigned to it.</summary>
+    public const string GateApproversGroupId = "00000000-0000-4000-8000-0000000grp02";
+    public const string GateApproversGroupName = "[cbi]\\Release Gate Approvers";
 
     public static readonly (string Id, string Name)[] Team =
     [
@@ -54,6 +57,8 @@ public sealed class MockWorld
         double PrsPerDay, bool Dormant, string Tfm, bool Legacy, bool DeploysToProd)
     {
         public int CiPipelineId => 100 + Index;
+        /// <summary>Separate release pipeline (triggered by CI's "Trigger Releases" stage) for deployable repos.</summary>
+        public int? ReleasePipelineId => Type == RepoType.Service && Components.Length > 0 ? 500 + Index : null;
         public int? NightlyPipelineId => Index % 4 == 0 ? 300 + Index : null;
     }
 
@@ -129,7 +134,7 @@ public sealed class MockWorld
             ("hiera-data", RepoType.Infra, true, "", "main", "", false, false),
             ("feature-flags", RepoType.Service, true, "api", "main", "net10.0", false, false),
             // Other teams' repos (visible in the picker, not assigned by default).
-            ("pipeline-templates", RepoType.Library, false, "", "main", "", false, false),
+            ("cbi-yaml-templates", RepoType.Library, false, "", "main", "", false, false),
             ("frontend-portal", RepoType.Service, false, "api", "main", "net10.0", false, false),
             ("mobile-bff", RepoType.Service, false, "api", "main", "net10.0", false, false),
             ("analytics-etl", RepoType.Service, false, "listener", "main", "net8.0", false, false),
@@ -359,55 +364,57 @@ public sealed class MockWorld
         run.StartTime = t;
         var order = 0;
 
-        // Build + Test (build stages). Possible failure, possibly retried (flaky).
+        // CI build stages (names as in the shared CI template). Possible failure, possibly retried (flaky).
+        var hasAks = repo.Components.Any(c => c.Kind == ComponentKind.AksService);
+        string[] buildStages = repo.Type == RepoType.Infra ? ["Terraform CI Build and Test"] : hasAks ? ["tests_cibuild", "skaffold_cibuild"] : ["cibuild"];
         var buildFails = rng.NextDouble() < repo.FailRate;
-        var failStage = rng.NextDouble() < 0.5 ? "Build" : "Test";
+        var failStage = buildStages[rng.Next(buildStages.Length)];
         var flaky = !isPr && (buildFails ? rng.NextDouble() < repo.FlakeShare : rng.NextDouble() < repo.FlakeShare * 0.12);
         if (flaky) buildFails = true;
         var useShared = rng.NextDouble() < 0.3;
         var error = useShared ? SharedErrors[rng.Next(SharedErrors.Length)] : $"[{repo.Name}] " + LocalErrors[rng.Next(LocalErrors.Length)].Replace("IntegrationTests", Pascal(repo.Name) + "Tests");
         var buildFailedFinal = false;
-        foreach (var stageName in new[] { "Build", "Test" })
+        foreach (var stageName in buildStages)
         {
-            var dur = stageName == "Build" ? 4 + rng.NextDouble() * 8 : 3 + rng.NextDouble() * 6;
+            var dur = 3 + rng.NextDouble() * 8;
+            var jobName = stageName.Replace(' ', '_').ToLowerInvariant();
             var stageFails = buildFails && stageName == failStage;
-            if (buildFailedFinal) { AddStage(timeline, id, stageName, ++order, null, null, "skipped", 1, false, stageName == "Build" ? "Compile" : "UnitTests"); continue; }
+            if (buildFailedFinal) { AddStage(timeline, id, stageName, ++order, null, null, "skipped", 1, false, jobName); continue; }
             if (stageFails && flaky)
             {
                 // attempt 1 failed (previous attempt), attempt 2 succeeded after a manual retry
-                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), "failed", 1, true, stageName == "Build" ? "Compile" : "UnitTests", error);
+                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), "failed", 1, true, jobName, error);
                 var retryAt = t.AddMinutes(dur + 8 + rng.NextDouble() * 40);
-                AddStage(timeline, id, stageName, order, retryAt, retryAt.AddMinutes(dur), "succeeded", 2, false, stageName == "Build" ? "Compile" : "UnitTests");
-                if (stageName == "Test") mrun.FlakyTests.Add($"IntegrationTests.{PrTitles[rng.Next(PrTitles.Length)].Replace(' ', '_')}");
+                AddStage(timeline, id, stageName, order, retryAt, retryAt.AddMinutes(dur), "succeeded", 2, false, jobName);
+                if (stageName.StartsWith("tests", StringComparison.Ordinal)) mrun.FlakyTests.Add($"IntegrationTests.{PrTitles[rng.Next(PrTitles.Length)].Replace(' ', '_')}");
                 t = retryAt.AddMinutes(dur);
             }
             else if (stageFails)
             {
-                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), "failed", 1, false, stageName == "Build" ? "Compile" : "UnitTests", error);
+                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), "failed", 1, false, jobName, error);
                 t = t.AddMinutes(dur);
                 buildFailedFinal = true;
             }
             else
             {
                 var res = rng.NextDouble() < 0.005 ? "succeededWithIssues" : "succeeded";
-                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), res, 1, false, stageName == "Build" ? "Compile" : "UnitTests",
+                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), res, 1, false, jobName,
                     res == "succeededWithIssues" ? $"[{repo.Name}] Code coverage below threshold (continueOnError)" : null);
                 if (res == "succeededWithIssues") buildFailedFinal = true;
                 t = t.AddMinutes(dur);
             }
         }
 
-        // Deployment stages for CI runs on main of service repos.
-        if (!isPr && !isNightly && repo.Type == RepoType.Service && repo.Components.Length > 0)
+        // Main-branch CI publishes an artifact and triggers the separate release pipeline.
+        var triggersRelease = !isPr && !isNightly && repo.ReleasePipelineId is not null;
+        if (!isPr && !isNightly)
         {
-            var goesToSim = rng.NextDouble() < 0.45;
-            var goesToProd = goesToSim && rng.NextDouble() < 0.75;
-            foreach (var (env, stage) in new[] { ("team", "Deploy_team"), ("staging", "Deploy_staging"), ("sim", "Deploy_sim"), ("prod", "Deploy_prod") })
+            foreach (var (stageName, job) in new[] { ("artifact", "publish_artifact"), ("Trigger Releases", "trigger_releases") })
             {
-                var reach = !buildFailedFinal && env switch { "sim" => goesToSim, "prod" => goesToProd, _ => true };
-                if (!reach) { AddDeployStage(mrun, repo, stage, ++order, null, "skipped", rng, env, ref t); continue; }
-                var failed = AddDeployStage(mrun, repo, stage, ++order, t, null, rng, env, ref t);
-                if (failed) buildFailedFinal = true;
+                if (buildFailedFinal) { AddStage(timeline, id, stageName, ++order, null, null, "skipped", 1, false, job); continue; }
+                var dur = 0.5 + rng.NextDouble() * 1.5;
+                AddStage(timeline, id, stageName, ++order, t, t.AddMinutes(dur), "succeeded", 1, false, job);
+                t = t.AddMinutes(dur);
             }
         }
 
@@ -415,6 +422,72 @@ public sealed class MockWorld
         run.FinishTime = t;
         run.Result = timeline.Any(r => r.Type == "Stage" && !r.IsPreviousAttempt && r.Result == "failed") ? "failed"
             : timeline.Any(r => r.Type == "Stage" && !r.IsPreviousAttempt && r.Result is "succeededWithIssues") ? "partiallySucceeded" : "succeeded";
+        run.Status = "completed";
+        _runs.Add(mrun);
+
+        if (triggersRelease && !buildFailedFinal)
+            GenerateRelease(repo, repo.ReleasePipelineId!.Value * 100000 + seq, t.AddSeconds(30), sha, tpl, tplSha);
+    }
+
+    /// <summary>
+    /// Release pipeline run: "software release 3.4" → "Approval Gate 2" (automated; sometimes blocked and escalated to
+    /// your group) → "testlemur deploy" → staging/sim/prod per region (green = UK, eu; a release may go to one or both).
+    /// </summary>
+    private void GenerateRelease(MockRepo repo, int id, DateTimeOffset queued, string sha, string tpl, string tplSha)
+    {
+        var rng = Rng("release", id.ToString());
+        var seq = id % 100000;
+        var run = new Run
+        {
+            Id = id, PipelineId = repo.ReleasePipelineId!.Value, RepoId = repo.Id, BuildNumber = $"3.4.{seq % 50000}",
+            SourceBranch = "refs/heads/main", SourceVersion = sha, Reason = "resourceTrigger", QueueTime = queued, RequestedFor = "cbi Build Service (cbinfrastructure)",
+            WebUrl = $"https://dev.azure.com/contoso/cbi/_build/results?buildId={id}",
+            TemplateRef = $"refs/heads/{tpl}", TemplateSha = tplSha, TemplateAlias = "templates",
+        };
+        var timeline = new List<TimelineRecord>();
+        var mrun = new MockRun { Run = run, Timeline = timeline };
+        var t = queued.AddSeconds(15 + rng.Next(60));
+        run.StartTime = t;
+        var order = 0;
+
+        var setup = 0.5 + rng.NextDouble();
+        AddStage(timeline, id, "software release 3.4", ++order, t, t.AddMinutes(setup), "succeeded", 1, false, "release_setup");
+        t = t.AddMinutes(setup);
+
+        // Approval Gate 2: automated checks; ~12% get blocked (deployment window, dead letters, incident) and need a human.
+        var gateId = StableGuid($"{id}:gate:stage");
+        var ckId = StableGuid($"{id}:gate:checkpoint");
+        var approvalId = StableGuid($"{id}:gate:approval");
+        var blocked = rng.NextDouble() < 0.12;
+        var gateWait = blocked ? 0.5 + rng.NextDouble() * 6 : (1 + rng.NextDouble() * 3) / 60;
+        var gateDone = t.AddHours(gateWait);
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = gateId, Type = "Stage", Name = "Approval Gate 2", Identifier = "approval_gate_2", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone, Order = ++order });
+        timeline.Add(new TimelineRecord { RunId = id, RecordId = ckId, ParentId = gateId, Type = "Checkpoint", Name = "Checkpoint", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone });
+        if (blocked)
+        {
+            timeline.Add(new TimelineRecord { RunId = id, RecordId = approvalId, ParentId = ckId, Type = "Checkpoint.Approval", Name = "Release gate approval", Attempt = 1, Result = "succeeded", State = "completed", StartTime = t, FinishTime = gateDone });
+            mrun.Approvals.Add((approvalId, "Approval Gate 2", "", t, gateDone, true, EscalationReasons[rng.Next(EscalationReasons.Length)]));
+        }
+        t = gateDone;
+
+        var regionRoll = rng.NextDouble();
+        var regions = regionRoll < 0.35 ? new[] { "green" } : regionRoll < 0.5 ? new[] { "eu" } : new[] { "green", "eu" };
+        var goesToSim = rng.NextDouble() < 0.5;
+        var goesToProd = goesToSim && rng.NextDouble() < 0.75;
+        var failed = false;
+        var plan = new List<(string Stage, bool Reach)> { ("testlemur deploy", true) };
+        foreach (var tier in new[] { "staging", "sim", "prod" })
+            foreach (var region in new[] { "green", "eu" })
+                plan.Add(($"{tier}{region} deploy", regions.Contains(region) && tier switch { "sim" => goesToSim, "prod" => goesToProd, _ => true }));
+        foreach (var (stage, reach) in plan)
+        {
+            if (!reach || failed) { AddDeployStage(mrun, repo, stage, ++order, null, "skipped", rng, ref t); continue; }
+            failed = AddDeployStage(mrun, repo, stage, ++order, t, null, rng, ref t);
+        }
+
+        mrun.End = t;
+        run.FinishTime = t;
+        run.Result = failed ? "failed" : "succeeded";
         run.Status = "completed";
         _runs.Add(mrun);
     }
@@ -435,55 +508,50 @@ public sealed class MockWorld
         });
     }
 
-    /// <summary>Returns true if the stage failed.</summary>
-    private bool AddDeployStage(MockRun mrun, MockRepo repo, string stage, int order, DateTimeOffset? start, string? forcedResult, Random rng, string env, ref DateTimeOffset t)
+    /// <summary>Deploy stage with the shared template's jobs. Returns true if the stage failed.</summary>
+    private static bool AddDeployStage(MockRun mrun, MockRepo repo, string stage, int order, DateTimeOffset? start, string? forcedResult, Random rng, ref DateTimeOffset t)
     {
         var runId = mrun.Run.Id;
         var tl = mrun.Timeline;
         var stageId = StableGuid($"{runId}:{stage}:stage:1");
         if (forcedResult == "skipped" || start is null)
         {
-            tl.Add(new TimelineRecord { RunId = runId, RecordId = stageId, Type = "Stage", Name = stage, Identifier = stage, Attempt = 1, Result = "skipped", State = "completed", Order = order });
+            tl.Add(new TimelineRecord { RunId = runId, RecordId = stageId, Type = "Stage", Name = stage, Identifier = stage.Replace(' ', '_'), Attempt = 1, Result = "skipped", State = "completed", Order = order });
             return false;
         }
-        var s = start.Value;
-        var cursor = s;
-        // Approval checkpoint on sim/prod
-        if (env is "sim" or "prod")
-        {
-            var ckId = StableGuid($"{runId}:{stage}:checkpoint");
-            var approvalId = StableGuid($"{runId}:{stage}:approval");
-            var escalate = rng.NextDouble() < 0.12;
-            string? reason = escalate ? EscalationReasons[rng.Next(EscalationReasons.Length)] : null;
-            var wait = escalate ? 0.5 + rng.NextDouble() * 6 : 0.1 + rng.NextDouble() * (env == "prod" ? 5 : 2);
-            var done = cursor.AddHours(wait);
-            tl.Add(new TimelineRecord { RunId = runId, RecordId = ckId, ParentId = stageId, Type = "Checkpoint", Name = "Checkpoint", Attempt = 1, Result = "succeeded", State = "completed", StartTime = cursor, FinishTime = done });
-            tl.Add(new TimelineRecord { RunId = runId, RecordId = approvalId, ParentId = ckId, Type = "Checkpoint.Approval", Name = escalate ? "Tech lead approval" : "Release approval", Attempt = 1, Result = "succeeded", State = "completed", StartTime = cursor, FinishTime = done });
-            mrun.Approvals.Add((approvalId, stage, env, cursor, done, escalate, reason));
-            cursor = done;
-        }
-        var deployFails = rng.NextDouble() < (repo.Legacy ? 0.08 : 0.025);
-        var phaseId = StableGuid($"{runId}:{stage}:phase:1");
-        tl.Add(new TimelineRecord { RunId = runId, RecordId = phaseId, ParentId = stageId, Type = "Phase", Name = "Deploy", Identifier = $"{stage}.Deploy", Attempt = 1, Result = "succeeded", State = "completed", StartTime = cursor });
+        var cursor = start.Value;
         var hasDb = repo.Components.Any(c => c.Kind == ComponentKind.Database);
-        var jobs = new List<string> { "SkaffoldDeploy" };
-        if (hasDb) jobs.Insert(0, "DeployDacpac");
-        var failJob = deployFails ? jobs[rng.Next(jobs.Count)] : null;
+        var hasAks = repo.Components.Any(c => c.Kind == ComponentKind.AksService);
+        var hasListener = repo.Components.Any(c => c.Name.EndsWith("-listener", StringComparison.Ordinal));
+        var jobs = new List<string> { "pre_apply", "terraform_deploy" };
+        if (hasListener) jobs.Add("terraform_servicebus_namespace_deploy");
+        if (hasDb) { jobs.Add("mssql_managed_identity_deploy"); jobs.Add("dacpac_apply"); }
+        if (hasAks) jobs.Add("skaffold_deploy");
+        var deployFails = rng.NextDouble() < (repo.Legacy ? 0.08 : 0.025);
+        var candidates = jobs.Where(j => j is "skaffold_deploy" or "dacpac_apply" or "terraform_deploy").ToList();
+        var failJob = deployFails ? candidates[rng.Next(candidates.Count)] : null;
+        var phaseId = StableGuid($"{runId}:{stage}:phase:1");
+        tl.Add(new TimelineRecord { RunId = runId, RecordId = phaseId, ParentId = stageId, Type = "Phase", Name = "deploy", Identifier = $"{stage}.deploy", Attempt = 1, Result = "succeeded", State = "completed", StartTime = cursor });
         foreach (var job in jobs)
         {
-            var dur = job == "DeployDacpac" ? 2 + rng.NextDouble() * 4 : 3 + rng.NextDouble() * 6;
+            var dur = job switch { "pre_apply" => 0.5 + rng.NextDouble(), "dacpac_apply" => 2 + rng.NextDouble() * 4, "skaffold_deploy" => 3 + rng.NextDouble() * 6, _ => 1 + rng.NextDouble() * 3 };
             var fails = job == failJob;
-            var err = fails ? (job == "DeployDacpac" ? $"[{repo.Name}] " + DeployErrors[2] : rng.NextDouble() < 0.5 ? DeployErrors[1] : $"[{repo.Name}] " + DeployErrors[0]) : null;
+            var err = !fails ? null : job switch
+            {
+                "dacpac_apply" => $"[{repo.Name}] " + DeployErrors[2],
+                "skaffold_deploy" => rng.NextDouble() < 0.5 ? DeployErrors[1] : $"[{repo.Name}] " + DeployErrors[0],
+                _ => $"[{repo.Name}] Error: Error acquiring the state lock (terraform)",
+            };
             tl.Add(new TimelineRecord
             {
-                RunId = runId, RecordId = StableGuid($"{runId}:{stage}:{job}"), ParentId = phaseId, Type = "Job", Name = job, Identifier = $"{stage}.Deploy.{job}",
+                RunId = runId, RecordId = StableGuid($"{runId}:{stage}:{job}"), ParentId = phaseId, Type = "Job", Name = job, Identifier = $"{stage}.deploy.{job}",
                 Attempt = 1, Result = fails ? "failed" : "succeeded", State = "completed", StartTime = cursor, FinishTime = cursor.AddMinutes(dur),
                 ErrorMessage = err, ErrorFingerprint = err is null ? null : FailureFingerprint.Compute(err),
             });
             cursor = cursor.AddMinutes(dur);
             if (fails) break;
         }
-        tl.Add(new TimelineRecord { RunId = runId, RecordId = stageId, Type = "Stage", Name = stage, Identifier = stage, Attempt = 1, Result = deployFails ? "failed" : "succeeded", State = "completed", StartTime = s, FinishTime = cursor, Order = order });
+        tl.Add(new TimelineRecord { RunId = runId, RecordId = stageId, Type = "Stage", Name = stage, Identifier = stage.Replace(' ', '_'), Attempt = 1, Result = deployFails ? "failed" : "succeeded", State = "completed", StartTime = start, FinishTime = cursor, Order = order });
         t = cursor.AddMinutes(0.5);
         return deployFails;
     }

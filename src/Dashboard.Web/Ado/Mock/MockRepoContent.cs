@@ -159,12 +159,11 @@ public static class MockRepoContent
             f("azure-pipelines.yml", "trigger:\n  - main\npool:\n  vmImage: ubuntu-latest\nstages:\n  - stage: Build\n    jobs:\n      - job: Compile\n        steps:\n          - script: dotnet build\n          - script: dotnet test\n  - stage: Deploy_prod\n    jobs:\n      - deployment: Deploy\n        environment: prod\n        strategy:\n          runOnce:\n            deploy:\n              steps:\n                - script: echo deploy\n");
             return;
         }
-        var template = deploy ? (repo.Components.Any(c => c.Kind == ComponentKind.Database) ? "service-with-db.yml" : "service.yml") : "library.yml";
-        f("azure-pipelines.yml",
-            $"trigger:\n  - main\nresources:\n  repositories:\n    - repository: templates\n      type: git\n      name: Platform/pipeline-templates\n      ref: {refName}\n" +
-            $"extends:\n  template: pipelines/{template}@templates\n  parameters:\n    serviceName: {repo.Name}\n" +
-            (deploy ? "    environments: [team, staging, sim, prod]\n" : ""));
+        var resources = $"resources:\n  repositories:\n    - repository: templates\n      type: git\n      name: cbi/cbi-yaml-templates\n      ref: {refName}\n";
+        f("azure-pipelines.yml", "trigger:\n  - main\n" + resources + $"extends:\n  template: v3/ci_build_v4.yaml@templates\n  parameters:\n    serviceName: {repo.Name}\n");
+        if (deploy && repo.ReleasePipelineId is not null)
+            f("release.yml", "trigger: none\n" + resources + $"extends:\n  template: v3/software_release_v5.yaml@templates\n  parameters:\n    serviceName: {repo.Name}\n    regions: [green, eu]\n    teamEnvironment: lemur\n");
         if (repo.NightlyPipelineId is not null)
-            f("pipelines/nightly.yml", $"schedules:\n  - cron: \"0 1 * * 1-5\"\n    branches:\n      include: [main]\nresources:\n  repositories:\n    - repository: templates\n      type: git\n      name: Platform/pipeline-templates\n      ref: {refName}\nextends:\n  template: pipelines/nightly.yml@templates\n");
+            f("pipelines/nightly.yml", $"schedules:\n  - cron: \"0 1 * * 1-5\"\n    branches:\n      include: [main]\nresources:\n  repositories:\n    - repository: templates\n      type: git\n      name: cbi/cbi-yaml-templates\n      ref: {refName}\nextends:\n  template: v3/nightly_v2.yaml@templates\n");
     }
 }

@@ -131,7 +131,9 @@ public class SyncServiceTests : IDisposable
 
         Assert.True(await db.Runs.CountAsync() > 100);
         Assert.True(await db.TimelineRecords.AnyAsync(t => t.IsPreviousAttempt), "retries should produce previous-attempt records");
-        Assert.True(await db.Deployments.AnyAsync(d => d.EnvironmentName == "prod"));
+        Assert.True(await db.Deployments.AnyAsync(d => d.EnvironmentName == "prod-green" || d.EnvironmentName == "prod-eu"));
+        Assert.True(await db.Deployments.AnyAsync(d => d.EnvironmentName == "team" && d.StageName == "testlemur deploy"));
+        Assert.True(await db.Pipelines.AnyAsync(p => p.Name.EndsWith("-release")));
         Assert.True(await db.PrEvents.AnyAsync());
         Assert.True(await db.Runs.AnyAsync(r => r.TemplateRef == "refs/heads/next"));
         Assert.True(stats.Calls > 0);

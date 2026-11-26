@@ -46,22 +46,46 @@ public static class Stats
 
 public static class StageClassifier
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> Cache = new();
+
+    public static Regex Rx(string pattern) =>
+        Cache.GetOrAdd(pattern, p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(200)));
+
+    public static bool AnyMatch(IEnumerable<string> patterns, params string?[] values) =>
+        patterns.Any(p => values.Any(v => v is not null && Rx(p).IsMatch(v.Trim())));
+
     public static EnvironmentConfig? MatchEnvironment(string? stageName, string? identifier, IEnumerable<EnvironmentConfig> envs)
     {
         foreach (var env in envs.OrderByDescending(e => e.Order))
-        {
-            foreach (var pattern in env.StagePatterns)
-            {
-                var rx = new Regex(pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(200));
-                if ((stageName is not null && rx.IsMatch(stageName)) || (identifier is not null && rx.IsMatch(identifier)))
-                    return env;
-            }
-        }
+            if (AnyMatch(env.StagePatterns, stageName, identifier)) return env;
         return null;
     }
 
-    public static bool IsBuildStage(string? stageName, string? identifier, IEnumerable<EnvironmentConfig> envs, bool hasCheckpoints)
-        => !hasCheckpoints && MatchEnvironment(stageName, identifier, envs) is null;
+    public static bool IsGate(string? stageName, string? identifier, PipelinesConfig pipelines) =>
+        AnyMatch(pipelines.GateStagePatterns, stageName, identifier);
+
+    public static bool IsBuildStage(string? stageName, string? identifier, IEnumerable<EnvironmentConfig> envs, bool hasCheckpoints) =>
+        !hasCheckpoints && MatchEnvironment(stageName, identifier, envs) is null;
+
+    public static bool IsBuildStage(string? stageName, string? identifier, DashboardConfig config, bool hasCheckpoints) =>
+        IsBuildStage(stageName, identifier, config.Environments, hasCheckpoints) && !IsGate(stageName, identifier, config.Pipelines);
+}
+
+/// <summary>
+/// CI and release are usually separate YAML pipelines. Release pipelines are excluded from build stability
+/// (their gate/setup stages aren't builds). A pipeline is a release pipeline if its name matches
+/// pipelines.releaseNamePatterns, or if it never runs for PRs and every run with a timeline has a deploy stage.
+/// </summary>
+public static class PipelineClassifier
+{
+    public static bool IsRelease(string pipelineName, IReadOnlyCollection<(bool IsPullRequest, IReadOnlyList<string> StageNames)> runs, DashboardConfig config)
+    {
+        if (StageClassifier.AnyMatch(config.Pipelines.ReleaseNamePatterns, pipelineName)) return true;
+        if (runs.Any(r => r.IsPullRequest)) return false;
+        var withStages = runs.Where(r => r.StageNames.Count > 0).ToList();
+        return withStages.Count >= 3
+               && withStages.All(r => r.StageNames.Any(n => StageClassifier.MatchEnvironment(n, n, config.Environments) is not null));
+    }
 }
 
 public static class FailureFingerprint

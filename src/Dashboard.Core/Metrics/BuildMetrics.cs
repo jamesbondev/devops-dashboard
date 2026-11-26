@@ -62,7 +62,7 @@ public sealed class BuildMetricsCalculator(DashboardConfig config)
 
         var checkpointParents = records.Where(r => r.Type.StartsWith("Checkpoint", StringComparison.OrdinalIgnoreCase))
             .Select(r => r.ParentId).Where(p => p is not null).ToHashSet();
-        bool IsBuild(TimelineRecord s) => StageClassifier.IsBuildStage(s.Name, s.Identifier, config.Environments,
+        bool IsBuild(TimelineRecord s) => StageClassifier.IsBuildStage(s.Name, s.Identifier, config,
             checkpointParents.Contains(s.RecordId));
 
         var buildStages = stages.Where(IsBuild).ToList();

@@ -279,15 +279,15 @@ public sealed class LiveAdoClientTests : IDisposable
                    "gh":{"repository":{"fullName":"contoso/tools","connection":{"id":"c0ffee00-0000-4000-8000-000000000000"},"type":"gitHub"},"refName":"refs/heads/main","version":"fedcba9876543210fedcba9876543210fedcba98"}}},
                  "id":1203,"name":"20261121.1"}
                 """))
-            .On("/Platform/_apis/git/repositories/pipeline-templates", _ => Json("""
-                {"id":"7c2e1f3b-0000-4000-8000-0000000000e5","name":"pipeline-templates","project":{"id":"5d1b7a9c-0000-4000-8000-00000000a001","name":"Platform"},"defaultBranch":"refs/heads/main"}
+            .On("/cbi/_apis/git/repositories/cbi-yaml-templates", _ => Json("""
+                {"id":"7c2e1f3b-0000-4000-8000-0000000000e5","name":"cbi-yaml-templates","project":{"id":"5d1b7a9c-0000-4000-8000-00000000a001","name":"cbi"},"defaultBranch":"refs/heads/main"}
                 """));
         var (client, _) = Create(fake);
 
         var res = await client.GetRunResourcesAsync(42, 1203, default);
 
         var tpl = res.Single(r => r.Alias == "tpl");
-        Assert.Equal("pipeline-templates", tpl.RepositoryName);
+        Assert.Equal("cbi-yaml-templates", tpl.RepositoryName);
         Assert.Equal("refs/heads/next", tpl.RefName);
         Assert.Equal("0123456789abcdef0123456789abcdef01234567", tpl.Version);
         Assert.Equal("contoso/tools", res.Single(r => r.Alias == "gh").RepositoryName);

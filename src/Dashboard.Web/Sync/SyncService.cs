@@ -245,7 +245,10 @@ public sealed class SyncService(
                 if (stage is not null)
                 {
                     a.StageName ??= stage.Name;
-                    a.EnvironmentName ??= StageClassifier.MatchEnvironment(stage.Name, stage.Identifier, Cfg.Environments)?.Name;
+                    // A gate stage (e.g. "Approval Gate 2") isn't an environment: report the next deploy stage's environment.
+                    a.EnvironmentName ??= StageClassifier.MatchEnvironment(stage.Name, stage.Identifier, Cfg.Environments)?.Name
+                        ?? recs.Where(t => t.Type == "Stage" && t.Order > stage.Order).OrderBy(t => t.Order)
+                            .Select(t => StageClassifier.MatchEnvironment(t.Name, t.Identifier, Cfg.Environments)?.Name).FirstOrDefault(n => n is not null);
                 }
             }
             a.AssignedToMe = AssignedToMe(a.ApproversJson, me);

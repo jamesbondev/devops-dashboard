@@ -15,31 +15,31 @@ time:
   workDays: [Monday, Tuesday, Wednesday, Thursday, Friday]
 
 # Environments are matched against timeline STAGE names/identifiers (regex, case-insensitive).
-# sim and prod are both Production tier. Adjust stagePatterns to match your templates' stage names.
+# Our release template names deploy stages "test{env} deploy" (team envs: lemur, skele, narwhal, duckzilla,
+# accounts, drogon, fox2, oce, pthr …) and "{staging|sim|prod}{green|eu} deploy" (green = UK).
+# sim and prod are both Production tier. Drift is only compared within a region (a release may go to one region).
 environments:
-  - name: team
-    tier: Team
-    order: 0
-    stagePatterns: ["^deploy[_-]?team", "team[_-]?env", "^dev($|[_-])", "^deploy[_-]?dev"]
-  - name: staging
-    tier: Staging
-    order: 1
-    stagePatterns: ["staging", "^stg"]
-  - name: sim
-    tier: Production
-    order: 2
-    stagePatterns: ["(^|[_-])sim($|[_-])", "^deploy[_-]?sim"]
-  - name: prod
-    tier: Production
-    order: 3
-    stagePatterns: ["(^|[_-])prod($|[_-]|uction)", "^deploy[_-]?prod"]
-    # adoId: 42                  # optional: ADO environment id, enables reading its check configurations
+  - { name: team,          tier: Team,       order: 0,                 stagePatterns: ['^test[a-z0-9]+[ _-]?deploy$'] }
+  - { name: staging-green, tier: Staging,    order: 1, region: green,  stagePatterns: ['^staging[ _-]?green[ _-]?deploy$'] }
+  - { name: staging-eu,    tier: Staging,    order: 2, region: eu,     stagePatterns: ['^staging[ _-]?eu[ _-]?deploy$'] }
+  - { name: sim-green,     tier: Production, order: 3, region: green,  stagePatterns: ['^sim[ _-]?green[ _-]?deploy$'] }
+  - { name: sim-eu,        tier: Production, order: 4, region: eu,     stagePatterns: ['^sim[ _-]?eu[ _-]?deploy$'] }
+  - { name: prod-green,    tier: Production, order: 5, region: green,  stagePatterns: ['^prod[ _-]?green[ _-]?deploy$'] }
+  - { name: prod-eu,       tier: Production, order: 6, region: eu,     stagePatterns: ['^prod[ _-]?eu[ _-]?deploy$'] }
+  # Optional: add adoId (from .../_environments/<id>) to read an environment's Approvals & checks for the Gates page.
 defaultEnvironmentTier: Team
+
+# CI and release are separate YAML pipelines. Release pipelines are excluded from build stability; they're detected by
+# name, or automatically (never run for PRs + every run has deploy stages). Gate stages hold a release before deploying.
+pipelines:
+  releaseNamePatterns: ['release']
+  gateStagePatterns: ['approval[ _-]?gate']   # "Approval Gate 2" — time here counts as approval wait
+  gateBlockedMinutes: 10                       # show "release waiting at gate" on Now after this long
 
 # The shared YAML templates repo (owned by another team). `project` is the ADO project that holds it
 # (can differ from azureDevOps.project). aliasPatterns match the `resources.repositories` alias in your pipelines.
 templates:
-  project: Platform              # <-- set to the project containing cbi-yaml-templates
+  project: cbi                   # resources.repositories name: cbi/cbi-yaml-templates
   repository: cbi-yaml-templates
   aliasPatterns: ["^templates?$", "cbi-yaml-templates"]
   compliantBranches: [main]
@@ -47,7 +47,7 @@ templates:
   staleInfoDays: 14
 
 # Identities excluded from PR metrics (substring match on display name, or exact id).
-botIdentities: ["Project Collection Build Service", "dependabot", "renovate", "Azure Pipelines"]
+botIdentities: ["Project Collection Build Service", "Build Service", "clearcoder", "product-health", "dependabot", "renovate", "Azure Pipelines"]
 
 sync:
   hotSeconds: 60                 # active PRs, running builds, pending approvals
@@ -97,6 +97,10 @@ components:
   # Map deployment stages/jobs to components when job names are generic.
   deployRules: []
   #  - { repo: "^orders$", stagePattern: "prod", jobPattern: "dacpac", component: Orders.Database }
+  # Deploy-stage jobs that deploy components. Other jobs (pre_apply, terraform_*, mssql_managed_identity_deploy)
+  # are infrastructure and don't count as a component deployment.
+  aksJobPatterns: ['skaffold']                 # skaffold_deploy → every AKS component in the repo
+  databaseJobPatterns: ['dacpac']              # dacpac_apply → the repo's .sqlproj database(s)
 
 audit:
   enabled: true

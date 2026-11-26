@@ -42,6 +42,7 @@ public sealed class RepoHealth
     public IReadOnlyList<FlakyJob> FlakyJobs { get; init; } = [];
     public bool HasMinReviewerPolicy { get; init; }
     public bool HasBuildValidationPolicy { get; init; }
+    public IReadOnlySet<int> ReleasePipelineIds { get; init; } = new HashSet<int>();
 }
 
 /// <summary>Computes per-repo health from raw rows (never accumulated). Cached per data version.</summary>
@@ -150,7 +151,14 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 var repoPipelines = pipelines.Where(p => p.RepoId == repo.Id).ToList();
                 var repoRuns = runs.Where(r => r.RepoId == repo.Id).ToList();
                 var mainRuns = repoRuns.Where(r => !r.IsPullRequest && r.SourceBranch == defaultBranch && r.Status == "completed").ToList();
-                var stats = repoPipelines.Select(p => build.ForPipeline(p.Id,
+                // Release pipelines (separate from CI) are excluded from build stability; their runs feed deployments.
+                var releaseIds = repoPipelines.Where(p => PipelineClassifier.IsRelease(p.Name,
+                        repoRuns.Where(r => r.PipelineId == p.Id).Select(r => (r.IsPullRequest,
+                            (IReadOnlyList<string>)(recordsByRun.GetValueOrDefault(r.Id) ?? []).Where(t => t.Type == "Stage").Select(t => t.Name).ToList())).ToList(), cfg))
+                    .Select(p => p.Id).ToHashSet();
+                var buildPipelines = repoPipelines.Where(p => !releaseIds.Contains(p.Id)).ToList();
+                var ciRuns = mainRuns.Where(r => !releaseIds.Contains(r.PipelineId)).ToList();
+                var stats = buildPipelines.Select(p => build.ForPipeline(p.Id,
                     mainRuns.Where(r => r.PipelineId == p.Id).Select(r => (r, recordsByRun.GetValueOrDefault(r.Id) ?? (IReadOnlyList<TimelineRecord>)[])).ToList(),
                     windowStart, now)).ToList();
                 var passed = stats.Sum(s => s.PassedRuns);
@@ -186,8 +194,8 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 {
                     Type = repo.Type,
                     Dormant = dormant,
-                    PipelineCount = repoPipelines.Count,
-                    DefaultBranchCiRuns = mainRuns.Count(r => r.QueueTime >= windowStart),
+                    PipelineCount = buildPipelines.Count,
+                    DefaultBranchCiRuns = ciRuns.Count(r => r.QueueTime >= windowStart),
                     CompletedBuildRuns = passed + failed,
                     MainSuccessRate = passed + failed == 0 ? null : (double)passed / (passed + failed),
                     LongestRedWorkingHours = longestRed,
@@ -217,7 +225,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                 {
                     var wStart = now.AddDays(-7 * (12 - i));
                     var wEnd = wStart.AddDays(7);
-                    var wk = mainRuns.Where(r => r.QueueTime >= wStart && r.QueueTime < wEnd)
+                    var wk = ciRuns.Where(r => r.QueueTime >= wStart && r.QueueTime < wEnd)
                         .Select(r => build.EvaluateRun(r, recordsByRun.GetValueOrDefault(r.Id) ?? [])).Where(o => o.Final is Outcome.Pass or Outcome.Fail).ToList();
                     var rv = repoPrs.Select(p => prCalc.Evaluate(p.p, p.Item2, now)).Where(f => f.FirstReviewAt >= wStart && f.FirstReviewAt < wEnd && !f.Pr.AuthorIsBot)
                         .Select(f => f.FirstReviewWorkingHours!.Value).ToList();
@@ -258,6 +266,7 @@ public sealed class HealthService(IServiceScopeFactory scopes, ConfigService con
                     FlakyJobs = stats.SelectMany(s => s.FlakyJobs).ToList(),
                     HasMinReviewerPolicy = hasMin,
                     HasBuildValidationPolicy = hasBuild,
+                    ReleasePipelineIds = releaseIds,
                 });
             }
             catch (Exception ex)

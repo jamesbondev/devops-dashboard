@@ -106,10 +106,10 @@ table.t td.num, table.t th.num { text-align: right; font-variant-numeric: tabula
 .qitem .title { font-weight: 600; }
 .qitem .detail { color: var(--muted); font-size: .85em; }
 .qitem .when { color: var(--muted); font-size: .8em; white-space: nowrap; text-align: right; }
-.qitem.k1 { border-left-color: var(--accent); background: var(--accent-soft); }
-.qitem.k2, .qitem.k3 { border-left-color: var(--bad); }
-.qitem.k4 { border-left-color: var(--warn); }
-.qitem.k5, .qitem.k6 { border-left-color: var(--muted); }
+.qitem.k1, .qitem.k2 { border-left-color: var(--accent); background: var(--accent-soft); }
+.qitem.k3, .qitem.k4 { border-left-color: var(--bad); }
+.qitem.k5 { border-left-color: var(--warn); }
+.qitem.k6, .qitem.k7 { border-left-color: var(--muted); }
 
 /* Matrix */
 table.matrix td.cell { min-width: 120px; }

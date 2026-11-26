@@ -14,7 +14,7 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
     private T Call<T>(T value) { stats.RecordCall(); stats.RecordTstu(0.05); return value; }
 
     public Task<AdoIdentity> GetMeAsync(CancellationToken ct) =>
-        Task.FromResult(Call(new AdoIdentity(MockWorld.MeId, MockWorld.MeName, new HashSet<string> { "00000000-0000-4000-8000-0000000grp02" })));
+        Task.FromResult(Call(new AdoIdentity(MockWorld.MeId, MockWorld.MeName, new HashSet<string> { MockWorld.GateApproversGroupId })));
 
     public Task<string?> GetProjectIdAsync(CancellationToken ct) => Task.FromResult<string?>(Call("mock-project-0001"));
 
@@ -31,8 +31,10 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
         var r = world.Repos.First(x => x.Id == repoId);
         var list = new List<Pipeline>
         {
-            new() { Id = r.CiPipelineId, RepoId = repoId, Name = $"{r.Name}-ci-cd", Folder = "\\" + r.Name, YamlPath = "azure-pipelines.yml", WebUrl = $"https://dev.azure.com/contoso/Platform/_build?definitionId={r.CiPipelineId}", LastSeenAt = Now },
+            new() { Id = r.CiPipelineId, RepoId = repoId, Name = $"{r.Name}-ci", Folder = "\\" + r.Name, YamlPath = "azure-pipelines.yml", WebUrl = $"https://dev.azure.com/contoso/Platform/_build?definitionId={r.CiPipelineId}", LastSeenAt = Now },
         };
+        if (r.ReleasePipelineId is { } rel)
+            list.Add(new Pipeline { Id = rel, RepoId = repoId, Name = $"{r.Name}-release", Folder = "\\" + r.Name, YamlPath = "release.yml", WebUrl = $"https://dev.azure.com/contoso/Platform/_build?definitionId={rel}", LastSeenAt = Now });
         if (r.NightlyPipelineId is { } n)
             list.Add(new Pipeline { Id = n, RepoId = repoId, Name = $"{r.Name}-nightly", Folder = "\\" + r.Name, YamlPath = "pipelines/nightly.yml", WebUrl = $"https://dev.azure.com/contoso/Platform/_build?definitionId={n}", LastSeenAt = Now });
         return Task.FromResult<IReadOnlyList<Pipeline>>(Call(list));
@@ -74,7 +76,7 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
         IReadOnlyList<RunResource> res = m is null ? [] :
         [
             new RunResource("self", m.Run.RepoId, "refs/heads/main", m.Run.SourceVersion),
-            new RunResource("templates", "Platform/pipeline-templates", m.Run.TemplateRef, m.Run.TemplateSha),
+            new RunResource("templates", "cbi/cbi-yaml-templates", m.Run.TemplateRef, m.Run.TemplateSha),
         ];
         return Task.FromResult(Call(res));
     }
@@ -160,12 +162,13 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
         foreach (var m in world.RunsAt(now).Where(r => r.End > now))
             foreach (var a in m.Approvals.Where(a => a.Created <= now && a.Done > now))
             {
+                // Gate escalations go to an approver group you're a member of (exercises group-membership matching).
                 var approvers = a.Mine
-                    ? new object[] { new { id = MockWorld.MeId, displayName = MockWorld.MeName, status = "pending" } }
-                    : [new { id = MockWorld.ReleaseApproversGroupId, displayName = "[Platform]\\Release Approvers", status = "pending" }];
+                    ? new object[] { new { id = MockWorld.GateApproversGroupId, displayName = MockWorld.GateApproversGroupName, status = "pending" } }
+                    : [new { id = MockWorld.ReleaseApproversGroupId, displayName = "[cbi]\\Release Approvers", status = "pending" }];
                 list.Add(new Approval
                 {
-                    Id = a.ApprovalId, RunId = m.Run.Id, PipelineId = m.Run.PipelineId, RepoId = m.Run.RepoId, StageName = a.StageName, EnvironmentName = a.Env,
+                    Id = a.ApprovalId, RunId = m.Run.Id, PipelineId = m.Run.PipelineId, RepoId = m.Run.RepoId, StageName = a.StageName, EnvironmentName = string.IsNullOrEmpty(a.Env) ? null : a.Env,
                     Status = "pending", CreatedOn = a.Created, ApproversJson = JsonSerializer.Serialize(approvers, JsonDefaults.Web),
                     Instructions = a.Reason ?? $"Approve deployment to {a.Env}", MinRequiredApprovers = 1, WebUrl = m.Run.WebUrl, LastSyncedAt = now,
                     EscalationReason = a.Reason,
@@ -177,22 +180,24 @@ public sealed class MockAdoClient(MockWorld world, IClock clock, AdoApiStats sta
     public Task<IReadOnlyList<EnvironmentCheck>> ListEnvironmentChecksAsync(int environmentId, string environmentName, CancellationToken ct)
     {
         var now = Now;
-        var me = JsonSerializer.Serialize(new { approverIds = new[] { MockWorld.MeId } }, JsonDefaults.Web);
+        var gate = JsonSerializer.Serialize(new { approverIds = new[] { MockWorld.GateApproversGroupId } }, JsonDefaults.Web);
         var group = JsonSerializer.Serialize(new { approverIds = new[] { MockWorld.ReleaseApproversGroupId } }, JsonDefaults.Web);
+        EnvironmentCheck C(string id, string type, string name, string approvers = "", bool me = false, string settings = "{}") => new()
+        {
+            EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}{id}", CheckType = type, DisplayName = name,
+            ApproverNames = approvers, RequiresMe = me, SettingsJson = settings, LastSeenAt = now,
+        };
         IReadOnlyList<EnvironmentCheck> list = environmentName switch
         {
-            "sim" or "prod" =>
+            var e when e.StartsWith("sim", StringComparison.Ordinal) || e.StartsWith("prod", StringComparison.Ordinal) =>
             [
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}01", CheckType = "Approval", DisplayName = "Release approval", ApproverNames = "[Platform]\\Release Approvers", SettingsJson = group, LastSeenAt = now },
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}02", CheckType = "Task Check", DisplayName = "Business hours (deployment window)", SettingsJson = "{}", LastSeenAt = now },
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}03", CheckType = "Task Check", DisplayName = "Invoke REST API: incident status", SettingsJson = "{}", LastSeenAt = now },
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}04", CheckType = "Task Check", DisplayName = "Query Azure Monitor: Service Bus dead letters", SettingsJson = "{}", LastSeenAt = now },
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}05", CheckType = "Approval", DisplayName = "Tech lead escalation approval", ApproverNames = MockWorld.MeName, RequiresMe = true, SettingsJson = me, LastSeenAt = now },
+                C("01", "Approval", "Release approval", "[cbi]\\Release Approvers", settings: group),
+                C("02", "Task Check", "Business hours (deployment window)"),
+                C("03", "Task Check", "Invoke REST API: incident status"),
+                C("04", "Task Check", "Query Azure Monitor: Service Bus dead letters"),
+                C("05", "Approval", "Approval Gate 2 escalation", MockWorld.GateApproversGroupName, settings: gate),
             ],
-            "staging" =>
-            [
-                new() { EnvironmentName = environmentName, EnvironmentAdoId = environmentId, CheckId = $"{environmentId}01", CheckType = "Task Check", DisplayName = "Business hours (deployment window)", SettingsJson = "{}", LastSeenAt = now },
-            ],
+            var e when e.StartsWith("staging", StringComparison.Ordinal) => [C("01", "Task Check", "Business hours (deployment window)")],
             _ => [],
         };
         return Task.FromResult(Call(list));

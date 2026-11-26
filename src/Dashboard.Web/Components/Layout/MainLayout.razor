@@ -80,7 +80,7 @@
         try
         {
             var now = await NowSvc.BuildAsync(null);
-            _attention = now.Attention.Count(a => a.Kind is AttentionKind.ApprovalForMe or AttentionKind.MainRed or AttentionKind.ProductionDeployFailed);
+            _attention = now.Attention.Count(a => a.Kind is AttentionKind.ApprovalForMe or AttentionKind.GateBlocked or AttentionKind.MainRed or AttentionKind.ProductionDeployFailed);
             await NotifyAsync(now);
         }
         catch (Exception) { /* page shows errors; badge is best effort */ }
@@ -94,7 +94,7 @@
         {
             var send = a.Kind switch
             {
-                AttentionKind.ApprovalForMe => n.ApprovalWaitingForMe,
+                AttentionKind.ApprovalForMe or AttentionKind.GateBlocked => n.ApprovalWaitingForMe,
                 AttentionKind.ProductionDeployFailed => n.ProductionDeployFailed,
                 AttentionKind.MainRed => (Clock.UtcNow - a.Since).TotalHours >= n.MainRedHours,
                 _ => false,

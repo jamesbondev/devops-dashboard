@@ -17,6 +17,7 @@ public sealed class DashboardConfig
     public ComponentsConfig Components { get; set; } = new();
     public AuditConfig Audit { get; set; } = new();
     public NowViewConfig NowView { get; set; } = new();
+    public PipelinesConfig Pipelines { get; set; } = new();
     public NotificationsConfig Notifications { get; set; } = new();
 }
 
@@ -53,6 +54,21 @@ public sealed class EnvironmentConfig
     /// <summary>Optional ADO environment id; needed only for reading check configurations.</summary>
     public int? AdoId { get; set; }
     public int Order { get; set; }
+    /// <summary>Optional region (e.g. green = UK, eu). Drift is only compared between Production environments in the same region.</summary>
+    public string? Region { get; set; }
+}
+
+/// <summary>How pipelines and non-deploy stages are recognised (CI and release are usually separate pipelines).</summary>
+public sealed class PipelinesConfig
+{
+    /// <summary>Regexes on pipeline name marking release pipelines (excluded from build stability). Pipelines whose
+    /// runs always contain deploy stages and never run for PRs are also treated as release pipelines.</summary>
+    public List<string> ReleaseNamePatterns { get; set; } = ["release"];
+    /// <summary>Regexes on stage name/identifier for gate stages (e.g. "Approval Gate 2"): not build stages; their
+    /// duration counts as approval wait for later deployments, and a long-running gate shows on Now as blocked.</summary>
+    public List<string> GateStagePatterns { get; set; } = ["approval[ _-]?gate"];
+    /// <summary>Minutes a gate stage must be waiting before it appears in the attention queue.</summary>
+    public int GateBlockedMinutes { get; set; } = 10;
 }
 
 public sealed class TemplateConfig
@@ -111,6 +127,10 @@ public sealed class ComponentsConfig
 {
     public List<ComponentOverride> Overrides { get; set; } = [];
     public List<DeployRuleConfig> DeployRules { get; set; } = [];
+    /// <summary>Deploy-stage job name regexes that deploy AKS components (all of the repo's AKS components).</summary>
+    public List<string> AksJobPatterns { get; set; } = ["skaffold"];
+    /// <summary>Deploy-stage job name regexes that deploy database components (dacpac).</summary>
+    public List<string> DatabaseJobPatterns { get; set; } = ["dacpac"];
 }
 
 public sealed class ComponentOverride

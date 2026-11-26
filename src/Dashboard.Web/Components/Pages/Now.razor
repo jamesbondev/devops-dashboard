@@ -33,7 +33,7 @@ else if (_model is { } m)
             case "attention":
                 <section class="panel">
                     <header><h2>Needs attention</h2><span class="badge @(m.Attention.Count > 0 ? "bad" : "ok")">@m.Attention.Count</span>
-                        <span class="meta">ranked: your approvals → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
+                        <span class="meta">ranked: your approvals → blocked gates → main red → failed Production deploy → slow release → stuck PR → failed PR validation</span></header>
                     @if (m.Attention.Count == 0) { <div class="empty">Nothing needs you right now. 🎉</div> }
                     <div class="queue">
                         @foreach (var a in m.Attention.Take(_showAll ? 500 : 25))
@@ -158,6 +158,7 @@ else if (_model is { } m)
     private static string Icon(AttentionKind k) => k switch
     {
         AttentionKind.ApprovalForMe => "✋",
+        AttentionKind.GateBlocked => "🚧",
         AttentionKind.MainRed => "🔴",
         AttentionKind.ProductionDeployFailed => "💥",
         AttentionKind.StuckRelease => "🐢",

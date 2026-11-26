@@ -60,6 +60,22 @@ Every phase in [plan.md](plan.md) is implemented and tested against **mock** Azu
    - After a day of data, tune `rules` thresholds against the Health table.
    - Pick 3 golden repos and hand-label them.
 
+## Adapted to our real pipelines (2026-11-26)
+- **Separate pipelines:** CI and release are separate pipelines.
+  - Release pipelines are excluded from build stability. They're detected by `pipelines.releaseNamePatterns`, or automatically when a pipeline never runs for PRs and every run deploys.
+- **Environments:** `test{env} deploy` = team. `{staging|sim|prod}{green|eu} deploy` = per-region environments.
+  - Sim and prod are both Production tier.
+  - Drift is only compared within a region.
+- **Approval Gate 2** (`pipelines.gateStagePatterns`):
+  - not a build stage
+  - its time counts as approval wait
+  - a release waiting there longer than `gateBlockedMinutes` shows on Now as "release waiting at gate", read from the timeline, so it works for either check type
+  - approvals in the gate report the next deploy stage's environment
+- **Components:** `skaffold_deploy` → the repo's AKS components; `dacpac_apply` → its database. `pre_apply`, `terraform_*` and `mssql_managed_identity_deploy` are infrastructure.
+- **Templates:** `cbi/cbi-yaml-templates`, alias `templates`, branches `main`/`next`.
+- **Bots:** clearcoder, product-health and "Build Service" accounts are excluded from PR metrics.
+- **Mock:** mirrors all of the above.
+
 ## Known risks for the first live run
 
 | Risk | Detail |

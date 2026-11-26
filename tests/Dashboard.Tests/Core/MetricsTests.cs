@@ -84,7 +84,7 @@ public class BuildMetricsTests
     public void Deploy_stage_failure_does_not_affect_build_outcome()
     {
         var run = B.Run(1, B.T0, "failed");
-        var records = new[] { B.Stage(1, "s1", "Build", "succeeded"), B.Stage(1, "s2", "Deploy_prod", "failed") };
+        var records = new[] { B.Stage(1, "s1", "Build", "succeeded"), B.Stage(1, "s2", "prodgreen deploy", "failed") };
         Assert.Equal(Outcome.Pass, _calc.EvaluateRun(run, records).Final);
     }
 
@@ -291,29 +291,77 @@ public class RuleEngineTests
 public class DeploymentDeriverTests
 {
     [Fact]
-    public void Skaffold_job_deploys_all_aks_components_and_dacpac_job_deploys_db()
+    public void Skaffold_job_deploys_aks_components_dacpac_deploys_db_and_infra_jobs_are_ignored()
     {
         var cfg = B.Config();
         var run = B.Run(9, B.T0);
         var comps = new List<Component>
         {
-            new() { Id = 1, Name = "orders-api", Kind = ComponentKind.AksService },
-            new() { Id = 2, Name = "orders-listener", Kind = ComponentKind.AksService },
-            new() { Id = 3, Name = "Orders.Database", Kind = ComponentKind.Database },
+            new() { Id = 1, Name = "interest-api", Kind = ComponentKind.AksService },
+            new() { Id = 2, Name = "interest-listener", Kind = ComponentKind.AksService },
+            new() { Id = 3, Name = "Interest.Database", Kind = ComponentKind.Database },
         };
         var records = new List<TimelineRecord>
         {
-            B.Stage(9, "st", "Deploy_prod", "succeeded"),
-            new() { RunId = 9, RecordId = "ck", ParentId = "st", Type = "Checkpoint", Name = "Checkpoint", StartTime = B.T0, FinishTime = B.T0.AddMinutes(30) },
-            new() { RunId = 9, RecordId = "ph", ParentId = "st", Type = "Phase", Name = "phase" },
-            B.Job(9, "j1", "ph", "SkaffoldDeploy", "succeeded"),
-            B.Job(9, "j2", "ph", "DeployDacpac", "succeeded"),
+            B.Stage(9, "gate", "Approval Gate 2", "succeeded", start: B.T0.AddMinutes(-60), minutes: 45),
+            B.Stage(9, "st", "prodgreen deploy", "succeeded"),
+            new() { RunId = 9, RecordId = "ph", ParentId = "st", Type = "Phase", Name = "deploy" },
+            B.Job(9, "j0", "ph", "pre_apply", "succeeded"),
+            B.Job(9, "j1", "ph", "terraform_deploy", "succeeded"),
+            B.Job(9, "j2", "ph", "terraform_servicebus_namespace_deploy", "succeeded"),
+            B.Job(9, "j3", "ph", "mssql_managed_identity_deploy", "succeeded"),
+            B.Job(9, "j4", "ph", "dacpac_apply", "failed"),
+            B.Job(9, "j5", "ph", "skaffold_deploy", "succeeded"),
         };
-        var deps = new DeploymentDeriver(cfg).Derive(run, "orders", "orders-ci", records, comps);
+        var deps = new DeploymentDeriver(cfg).Derive(run, "interest", "interest-release", records, comps);
         Assert.Equal(3, deps.Count);
-        Assert.All(deps, d => Assert.Equal("prod", d.EnvironmentName));
-        Assert.All(deps, d => Assert.Equal(1800, d.WaitSeconds, 1));
-        Assert.Equal([1, 2, 3], deps.Select(d => d.ComponentId!.Value).Order());
+        Assert.All(deps, d => Assert.Equal("prod-green", d.EnvironmentName));
+        Assert.All(deps, d => Assert.Equal(45 * 60, d.WaitSeconds, 1)); // gate time counts as approval wait
+        Assert.Equal("failed", deps.Single(d => d.ComponentId == 3).Result);
+        Assert.All(deps.Where(d => d.ComponentId != 3), d => Assert.Equal("succeeded", d.Result));
+    }
+
+    [Fact]
+    public void Terraform_only_deploy_is_repo_level()
+    {
+        var records = new List<TimelineRecord>
+        {
+            B.Stage(1, "st", "simeu deploy", "succeeded"),
+            new() { RunId = 1, RecordId = "ph", ParentId = "st", Type = "Phase", Name = "deploy" },
+            B.Job(1, "j1", "ph", "terraform_deploy", "succeeded"),
+        };
+        var dep = Assert.Single(new DeploymentDeriver(B.Config()).Derive(B.Run(1, B.T0), "infra", "infra-release", records,
+            [new Component { Id = 1, Name = "x-api", Kind = ComponentKind.AksService }]));
+        Assert.Null(dep.ComponentId);
+        Assert.Equal("sim-eu", dep.EnvironmentName);
+    }
+
+    [Theory]
+    [InlineData("testlemur deploy", "team")]
+    [InlineData("testfox2 deploy", "team")]
+    [InlineData("staginggreen deploy", "staging-green")]
+    [InlineData("stagingeu deploy", "staging-eu")]
+    [InlineData("simgreen deploy", "sim-green")]
+    [InlineData("prodgreendeploy", "prod-green")]
+    [InlineData("prodeu deploy", "prod-eu")]
+    [InlineData("tests_cibuild", null)]
+    [InlineData("Terraform CI Build and Test", null)]
+    [InlineData("Approval Gate 2", null)]
+    [InlineData("software release 3.4", null)]
+    public void Stage_names_map_to_environments(string stage, string? env) =>
+        Assert.Equal(env, StageClassifier.MatchEnvironment(stage, stage, B.Config().Environments)?.Name);
+
+    [Fact]
+    public void Release_pipelines_are_detected_by_name_or_shape()
+    {
+        var cfg = B.Config();
+        IReadOnlyList<string> deploy = ["software release 3.4", "Approval Gate 2", "testlemur deploy", "prodeu deploy"];
+        IReadOnlyList<string> ci = ["tests_cibuild", "skaffold_cibuild", "artifact", "Trigger Releases"];
+        Assert.True(PipelineClassifier.IsRelease("interest-release", [], cfg));
+        Assert.True(PipelineClassifier.IsRelease("interest-cd", [(false, deploy), (false, deploy), (false, deploy)], cfg));
+        Assert.False(PipelineClassifier.IsRelease("interest-ci", [(false, ci), (true, ci), (false, ci)], cfg));
+        Assert.False(StageClassifier.IsBuildStage("Approval Gate 2", null, cfg, hasCheckpoints: false));
+        Assert.True(StageClassifier.IsBuildStage("Trigger Releases", null, cfg, hasCheckpoints: false));
     }
 
     [Fact]
@@ -371,7 +419,7 @@ public class ConfigLoaderTests
         var path = Path.Combine(AppContext.BaseDirectory, "../../../../../config/dashboard.yaml");
         var result = ConfigLoader.LoadFile(Path.GetFullPath(path));
         Assert.True(result.IsValid, string.Join("; ", result.Errors));
-        Assert.Contains(result.Config.Environments, e => e.Name == "sim" && e.Tier == EnvironmentTier.Production);
+        Assert.Contains(result.Config.Environments, e => e.Name == "sim-green" && e.Tier == EnvironmentTier.Production && e.Region == "green");
     }
 
     [Fact]
