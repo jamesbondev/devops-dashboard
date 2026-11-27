@@ -6,26 +6,27 @@
 
 <div class="grid-2">
     <section class="panel">
-        <header class="panel__head"><h2>Gates that can escalate to you</h2><Info Text="Environment check configurations (read daily). An approval check naming you or one of your groups means that environment can need your approval. Environments need adoId in config for live mode." Term="gate" /></header>
+        <header class="panel__head"><h2>How production approvals work</h2><Info Text="Environment check configurations, read daily from ADO. Environments need adoId in config for live mode." Term="gate" /></header>
+        <p class="text-sm tone-muted">Every Production deploy passes through these gates. The automated checks run first; if they can't approve the release on their own, it waits for a person in the approver group. When that's you, it appears at the top of <a href="">Now</a> with a link straight to the run in ADO.</p>
         @if (_checks.Count == 0) { <div class="empty">No check configurations read. Set <code>adoId</code> on environments in config/dashboard.yaml.</div> }
         @foreach (var g in _checks.GroupBy(c => c.EnvironmentName))
         {
-            <h3>@g.Key @if (g.Any(c => c.RequiresMe)) { <span class="pill pill--warn">can require you</span> }</h3>
+            <h3>@g.Key @if (g.Any(c => c.RequiresMe)) { <span class="pill pill--warn">may need your approval</span> }</h3>
             <table class="t"><tbody>
-            @foreach (var c in g) { <tr><td>@c.DisplayName</td><td class="tone-muted text-sm">@c.CheckType</td><td class="text-sm">@c.ApproverNames</td><td>@if (c.RequiresMe) { <span class="pill pill--warn">you</span> }</td></tr> }
+            @foreach (var c in g) { <tr><td>@c.DisplayName</td><td class="tone-muted text-sm">@c.CheckType</td><td class="text-sm">@c.ApproverNames</td><td>@if (c.RequiresMe) { <span class="pill pill--warn">you're an approver</span> }</td></tr> }
             </tbody></table>
             @if (_deployersByEnv.GetValueOrDefault(g.Key) is { Count: > 0 } dep) { <div class="text-sm tone-muted">Deployed to by: @string.Join(", ", dep)</div> }
         }
     </section>
 
     <section class="panel">
-        <header class="panel__head"><h2>Escalations to you <span class="kpi__window">30 d</span></h2><Info Text="Approvals that were assigned to you, by pipeline — the observed view of which pipelines need your approval." /></header>
-        @if (_history.Count == 0) { <div class="empty">None observed yet (history builds up as approvals are synced).</div> }
+        <header class="panel__head"><h2>Times a deploy needed a manual approval <span class="kpi__window">30 d</span></h2><Info Text="Approval requests that came to you (or your group) because the automated checks didn't approve on their own, grouped by repo and environment." /></header>
+        @if (_history.Count == 0) { <div class="empty">None in the last 30 days: releases are passing the automated checks.</div> }
         <table class="t"><thead><tr><th>Repo</th><th>Environment</th><th class="num">Times</th><th>Typical reason</th><th>Last</th></tr></thead><tbody>
         @foreach (var g in _history.GroupBy(a => (a.RepoId, a.EnvironmentName)).OrderByDescending(g => g.Count()))
         {
             <tr><td>@RepoName(g.Key.RepoId)</td><td>@g.Key.EnvironmentName</td><td class="num">@g.Count()</td>
-                <td class="text-sm">@g.GroupBy(a => a.EscalationReason ?? a.Instructions).OrderByDescending(x => x.Count()).First().Key</td><td><Ago At="g.Max(a => a.CreatedOn)" /></td></tr>
+                <td class="text-sm">@g.GroupBy(a => a.EscalationReason ?? a.Instructions).OrderByDescending(x => x.Count()).First().Key</td>@{ var last = g.MaxBy(a => a.CreatedOn)!; }<td class="nowrap"><Ago At="last.CreatedOn" /> @if (last.WebUrl is { } u) { <AdoLink Href="@u">open ↗</AdoLink> }</td></tr>
         }
         </tbody></table>
     </section>

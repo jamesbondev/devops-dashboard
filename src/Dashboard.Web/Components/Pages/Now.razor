@@ -12,7 +12,7 @@
         {
             var red = hm.Attention.Count(a => a.Kind == AttentionKind.MainRed);
             var mine = hm.Attention.Count(a => a.Kind is AttentionKind.ApprovalForMe or AttentionKind.GateBlocked);
-            <p class="page-head__headline"><strong class="@(red > 0 ? "tone-bad" : "")">@red repo@(red == 1 ? "" : "s")</strong> with main red · @mine approval@(mine == 1 ? "" : "s") waiting · @hm.Running.Count running · as of <Ago At="hm.GeneratedAt" /></p>
+            <p class="page-head__headline"><strong class="@(red > 0 ? "tone-bad" : "")">@red repo@(red == 1 ? "" : "s")</strong> with main red · @if (mine > 0) { <a href="#approvals" class="tone-warn"><strong>@mine approval@(mine == 1 ? "" : "s") waiting for you →</strong></a> } else { <span>0 approvals waiting for you</span> } · @hm.Running.Count running · as of <Ago At="hm.GeneratedAt" /></p>
         }
     </div>
     <div class="page-head__actions">
@@ -40,7 +40,9 @@ else if (_model is { } m)
                         <div class="kpi @(sl.Failures > 0 ? "kpi--bad" : "")"><div class="kpi__label">Main/CI failures <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.Failures</div></div>
                         <div class="kpi"><div class="kpi__label">PRs merged <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.Merged</div></div>
                         <div class="kpi"><div class="kpi__label">Production deploys <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.ProdDeploys</div><div class="kpi__sub">sim + prod</div></div>
-                        <div class="kpi @(sl.NewApprovals > 0 ? "kpi--warn" : "")"><div class="kpi__label">New approvals for you <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.NewApprovals</div></div>
+                        @{ var waitingMine = m.Attention.Count(a => a.Kind == AttentionKind.ApprovalForMe); }
+                        <div class="kpi @(waitingMine > 0 ? "kpi--warn" : "")"><div class="kpi__label">Approval requests for you <span class="kpi__window">@window</span></div><div class="kpi__value">@sl.NewApprovals</div>
+                            <div class="kpi__sub">@if (waitingMine > 0) { <a href="#approvals">@waitingMine still waiting →</a> } else { <span>all handled (by you or another approver)</span> }</div></div>
                     </div>
                     </div>
                 </section>

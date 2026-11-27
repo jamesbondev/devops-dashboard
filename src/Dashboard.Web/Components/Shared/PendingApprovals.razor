@@ -6,8 +6,8 @@
 
 @if (_pending.Count > 0)
 {
-    <section class="panel">
-        <header class="panel__head"><h2>Approvals</h2>
+    <section class="panel" id="approvals">
+        <header class="panel__head"><h2>Approvals waiting</h2>
             @if (_mine.Count > 0) { <span class="pill pill--count pill--warn" title="waiting for you">@_mine.Count for you</span> }
             <span class="panel__meta">@_pending.Count pending in total</span></header>
         <div class="table-wrap">
@@ -19,7 +19,7 @@
                     <div class="text-sm tone-muted">@a.StageName@((a.EscalationReason ?? a.Instructions) is { Length: > 0 } why ? $" · {why}" : "")</div></td>
                 <td class="text-sm tone-muted person wrap">@(a.AssignedToMe ? "" : Approvers(a))</td>
                 <td class="nowrap"><Ago At="a.CreatedOn" /></td>
-                <td class="nowrap"><AdoLink Href="@a.WebUrl">@(a.AssignedToMe ? "Approve in ADO ↗" : "Open ↗")</AdoLink></td>
+                <td class="nowrap"><AdoLink Href="@a.WebUrl">@(a.AssignedToMe ? "Review in ADO ↗" : "Open ↗")</AdoLink></td>
             </tr>
         }
         </tbody></table>
