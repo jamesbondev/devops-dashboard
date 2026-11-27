@@ -17,6 +17,7 @@ public static class RepoTypes
         if (StageClassifier.AnyMatch(config.Repos.E2EPatterns, repoName)) return RepoType.E2E;
         if (StageClassifier.AnyMatch(config.Repos.LoadPatterns, repoName)) return RepoType.Load;
         if (StageClassifier.AnyMatch(config.Repos.NapPatterns, repoName)) return RepoType.Nap;
+        if (StageClassifier.AnyMatch(config.Repos.LibraryPatterns, repoName)) return RepoType.Library;
         return RepoType.Service;
     }
 

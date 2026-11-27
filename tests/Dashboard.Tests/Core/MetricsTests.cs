@@ -298,6 +298,8 @@ public class RuleEngineTests
         c.Repos.NapPatterns = ["^nap[_-]"];
         Assert.Equal(RepoType.Nap, RepoTypes.Resolve("nap-rotate-keys", RepoType.Service, c));
         Assert.Equal(RepoType.Service, RepoTypes.Resolve("interest", RepoType.Service, c));
+        Assert.Equal(RepoType.Library, RepoTypes.Resolve("treasury_client-pkg", RepoType.Service, c));
+        Assert.Equal(RepoType.Library, RepoTypes.Resolve("outbox_pkg", RepoType.Service, c));
     }
 
     [Fact]

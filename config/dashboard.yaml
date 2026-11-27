@@ -100,6 +100,7 @@ repos:
   # low-priority "tests failing" item on Now (not "main red"), and the auditor is told what kind of repo it is.
   # Order: types below > type chosen on the repo page > name patterns > Service.
   e2ePatterns: ['^end2end[_-]', '(^|[_-])e2e([_-]|$)']
+  libraryPatterns: ['[_-]pkg$']   # shared packages, e.g. *-pkg / *_pkg
   napPatterns: []     # e.g. '^nap[_-]' — Non Automated Process (script pipelines)
   docsRules: [DOC-001, POL-001]   # the only tier rules for Docs / config repos
   loadPatterns: ['(^|[_-])load([_-]|$)']

@@ -30,6 +30,8 @@ public sealed class ReposConfig
     public List<string> E2EPatterns { get; set; } = ["^end2end[_-]", "(^|[_-])e2e([_-]|$)"];
     /// <summary>Repo-name patterns for load / performance test repos.</summary>
     public List<string> LoadPatterns { get; set; } = ["(^|[_-])load([_-]|$)"];
+    /// <summary>Repo-name patterns for shared library / package repos (e.g. client-pkg, outbox_pkg).</summary>
+    public List<string> LibraryPatterns { get; set; } = ["[_-]pkg$"];
     /// <summary>Repo-name patterns for NAP (Non Automated Process) repos: pipelines running scripts against APIs. Empty by default.</summary>
     public List<string> NapPatterns { get; set; } = [];
     /// <summary>The only tier rules that apply to Docs / config repos; every other rule is n/a.</summary>
