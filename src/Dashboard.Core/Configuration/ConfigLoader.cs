@@ -88,7 +88,7 @@ public static class ConfigLoader
                 errors.Add($"Gate environment '{g.Name}' clashes with a deployment environment name.");
         }
         foreach (var p in c.Components.AksJobPatterns.Concat(c.Components.DatabaseJobPatterns)) CheckRegex(p, "components job patterns", errors);
-        foreach (var p in c.Repos.E2EPatterns.Concat(c.Repos.LoadPatterns)) CheckRegex(p, "repos patterns", errors);
+        foreach (var p in c.Repos.E2EPatterns.Concat(c.Repos.LoadPatterns).Concat(c.Repos.NapPatterns)) CheckRegex(p, "repos patterns", errors);
         foreach (var t in c.Repos.Types)
             if (string.IsNullOrWhiteSpace(t.Name) || !Enum.TryParse<Entities.RepoType>(t.Type, ignoreCase: true, out _))
                 errors.Add($"repos.types[{t.Name}]: type must be one of {string.Join(", ", Enum.GetNames<Entities.RepoType>())}.");

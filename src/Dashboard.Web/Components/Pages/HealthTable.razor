@@ -35,7 +35,7 @@
 
 <div class="filters">
     <input type="search" class="input" placeholder="Filter repos…" @bind="_filter" @bind:event="oninput" />
-    <label>Type <select class="select" @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select></label>
+    <label>Type <select class="select" @bind="_type"><option value="">all</option><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option><option value="Docs">Docs / config</option><option value="Nap">NAP (scripts)</option></select></label>
     <label>Tier <select class="select" @bind="_tier"><option value="">all</option><option>Gold</option><option>Silver</option><option>Bronze</option><option>None</option></select></label>
     <label><input type="checkbox" @bind="_changed" /> changed this week</label>
     <label><input type="checkbox" @bind="_redOnly" /> red now</label>

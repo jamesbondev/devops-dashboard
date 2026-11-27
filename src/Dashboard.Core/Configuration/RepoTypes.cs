@@ -16,10 +16,14 @@ public static class RepoTypes
         if (stored != RepoType.Service) return stored;
         if (StageClassifier.AnyMatch(config.Repos.E2EPatterns, repoName)) return RepoType.E2E;
         if (StageClassifier.AnyMatch(config.Repos.LoadPatterns, repoName)) return RepoType.Load;
+        if (StageClassifier.AnyMatch(config.Repos.NapPatterns, repoName)) return RepoType.Nap;
         return RepoType.Service;
     }
 
+    /// <summary>Docs / config repos (documentation, access-request config, ...): no code, so only repos.docsRules apply and no code audit runs.</summary>
+    public static bool IsDocs(RepoType type) => type == RepoType.Docs;
+
     public static bool IsTestRepo(RepoType type) => type is RepoType.E2E or RepoType.Load;
 
-    public static string Label(RepoType type) => type switch { RepoType.E2E => "E2E tests", RepoType.Load => "Load tests", _ => type.ToString() };
+    public static string Label(RepoType type) => type switch { RepoType.E2E => "E2E tests", RepoType.Load => "Load tests", RepoType.Docs => "Docs / config", RepoType.Nap => "NAP (scripts)", _ => type.ToString() };
 }

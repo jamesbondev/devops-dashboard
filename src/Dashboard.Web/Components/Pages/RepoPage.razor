@@ -27,7 +27,7 @@ else
             <button class="btn btn--secondary btn--sm" @onclick="TogglePin">@(h.Repo.Pinned ? "Unpin" : "Pin")</button>
             <button class="btn btn--secondary btn--sm" @onclick="ToggleMute">@(h.Repo.Muted ? "Unmute" : "Mute")</button>
             <select class="select select--sm" value="@h.Type" @onchange="ChangeType" title="Repo type selects the rule set (repos.types in config wins; name patterns apply while this is Service)">
-                <option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option>
+                <option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option><option value="Docs">Docs / config</option><option value="Nap">NAP (scripts)</option>
             </select>
             <a class="btn btn--secondary btn--sm" href="@($"export/repo/{Uri.EscapeDataString(h.Repo.Name)}.md")" target="_blank">Export .md</a>
         </div>

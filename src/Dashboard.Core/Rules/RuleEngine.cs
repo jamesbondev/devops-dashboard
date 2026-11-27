@@ -54,6 +54,11 @@ public sealed class RuleEngine(DashboardConfig config)
                 outcomes.Add(new RuleOutcome(rule.Id, rule.Tier, RuleStatus.NotApplicable, null, $"n/a for {input.Type}", 0, info.Title));
                 continue;
             }
+            if (input.Type == RepoType.Docs && !config.Repos.DocsRules.Contains(rule.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                outcomes.Add(new RuleOutcome(rule.Id, rule.Tier, RuleStatus.NotApplicable, null, "n/a for docs / config repos", 0, info.Title));
+                continue;
+            }
             if (input.Dormant && ActivityRules.Contains(rule.Id) && rule.Id != "PIPE-001")
             {
                 outcomes.Add(new RuleOutcome(rule.Id, rule.Tier, RuleStatus.Dormant, null, "dormant", 0, info.Title));

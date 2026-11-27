@@ -7,7 +7,7 @@ namespace Dashboard.Core.Entities;
 
 /// <summary>E2E and Load are test-only repos: their pipelines test other systems, so failures there are an
 /// early warning about environments/apps, not a broken build of the repo itself.</summary>
-public enum RepoType { Service, Library, Infra, E2E, Load }
+public enum RepoType { Service, Library, Infra, E2E, Load, Docs, Nap }
 
 public sealed class Repo
 {

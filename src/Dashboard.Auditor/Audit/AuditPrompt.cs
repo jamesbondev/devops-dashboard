@@ -87,6 +87,12 @@ public static class AuditPrompt
                   + "deployed environments, not a deployable application. Judge checks against that code (scenario structure, "
                   + "configuration of targets and thresholds, reproducibility). Answer na for checks about application "
                   + "architecture, Kubernetes deployment, databases or messaging unless the test code itself has that concern.",
+        "nap" => "This is a NAP (Non Automated Process) repository: Azure DevOps pipelines that run mostly PowerShell scripts "
+                 + "calling APIs to perform operational actions. There is no deployable application. Judge checks against the "
+                 + "scripts and pipelines (error handling and exit codes, idempotency / safe re-runs, parameter validation, "
+                 + "no secrets in code, logging of what was changed, dry-run / what-if support). Answer na for checks about "
+                 + "application architecture, Kubernetes deployment, databases, messaging or .NET projects.",
+        "docs" => "This repository is documentation / configuration only (no application code expected).",
         "library" => "This repository is a shared library (no deployable service).",
         "infra" => "This repository is infrastructure / configuration (no application code expected).",
         _ => "",

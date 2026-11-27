@@ -24,7 +24,7 @@
             <tr>
                 <td><input type="checkbox" checked="@r.Assigned" disabled="@r.IsDisabled" @onchange="e => Assign(r, (bool)e.Value!)" /></td>
                 <td>@if (r.Assigned) { <a href="repo/@Uri.EscapeDataString(r.Name)">@r.Name</a> } else { @r.Name } @if (r.IsDisabled) { <span class="pill">disabled</span> }</td>
-                <td>@if (r.Assigned) { <select class="select" value="@RepoTypes.Resolve(r.Name, r.Type, TypeCfg.Current)" @onchange="e => SetType(r, e)" title="Name patterns (end2end_*, *-e2e-*, *-load-*) apply while this is Service; repos.types in config wins"><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option></select> }</td>
+                <td>@if (r.Assigned) { <select class="select" value="@RepoTypes.Resolve(r.Name, r.Type, TypeCfg.Current)" @onchange="e => SetType(r, e)" title="Name patterns (end2end_*, *-e2e-*, *-load-*) apply while this is Service; repos.types in config wins"><option>Service</option><option>Library</option><option>Infra</option><option value="E2E">E2E tests</option><option value="Load">Load tests</option><option value="Docs">Docs / config</option><option value="Nap">NAP (scripts)</option></select> }</td>
                 <td class="tone-muted text-sm">@((r.SizeBytes / 1024.0 / 1024).ToString("0.#")) MB</td>
                 <td class="text-sm">@if (r.Assigned) { if (r.BackfilledAt is { } b) { <Ago At="b" /> } else { <span class="pill pill--info">queued</span> } }</td>
             </tr>

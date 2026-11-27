@@ -280,6 +280,27 @@ public class RuleEngineTests
     }
 
     [Fact]
+    public void Docs_repo_only_gets_docs_rules()
+    {
+        var r = Engine().Evaluate(new RepoHealthInput
+        {
+            Type = RepoType.Docs, HasMinReviewerPolicy = true, HasReadme = true, FactsAvailable = true, Templates = Healthy().Templates,
+        });
+        var applicable = r.Outcomes.Where(o => o.Status != RuleStatus.NotApplicable).Select(o => o.RuleId).Order().ToList();
+        Assert.Equal(["DOC-001", "POL-001"], applicable);
+        Assert.Equal("Gold", r.Tier);
+    }
+
+    [Fact]
+    public void Nap_pattern_resolves_type()
+    {
+        var c = B.Config();
+        c.Repos.NapPatterns = ["^nap[_-]"];
+        Assert.Equal(RepoType.Nap, RepoTypes.Resolve("nap-rotate-keys", RepoType.Service, c));
+        Assert.Equal(RepoType.Service, RepoTypes.Resolve("interest", RepoType.Service, c));
+    }
+
+    [Fact]
     public void Insufficient_data_never_passes_and_marks_provisional()
     {
         var input = Healthy();

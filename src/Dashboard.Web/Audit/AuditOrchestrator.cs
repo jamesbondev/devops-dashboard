@@ -147,12 +147,14 @@ public sealed class AuditOrchestrator(
             run.RubricVersion = $"{rubric.Version}-{rubric.Hash[..Math.Min(8, rubric.Hash.Length)]}";
             var outcomes = new List<(CheckOutcome Outcome, AuditCheck Check)>();
             var checksById = rubric.Checks.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
-            foreach (var o in FactCheckEvaluator.Evaluate(facts, rubric.FactChecks))
+            var isDocs = Dashboard.Core.Configuration.RepoTypes.Resolve(repo.Name, repo.Type, cfg) == RepoType.Docs;
+            foreach (var o in isDocs ? [] : FactCheckEvaluator.Evaluate(facts, rubric.FactChecks))
                 if (checksById.TryGetValue(o.CheckId, out var c)) outcomes.Add((o, c));
 
             // 3. Judgement checks via the auditor (Copilot)
             AuditResult result = new() { Summary = "Facts-only audit (auditor unavailable).", AzureDependencies = facts.AzureServices };
-            var judgement = rubric.JudgementChecks.ToList();
+            var judgement = isDocs ? [] : rubric.JudgementChecks.ToList();
+            if (isDocs) result.Summary = "Docs / config repository: code checks don't apply, so no audit checks were run.";
             var status = cfg.Audit.Enabled ? await auditor.StatusAsync(ct) : new AuditorStatus { Ready = false, Error = "audit.enabled is false" };
             if (status.Ready && judgement.Count > 0)
             {
